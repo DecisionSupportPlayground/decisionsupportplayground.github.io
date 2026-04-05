@@ -9,7 +9,7 @@
  *   - Delegates rendering to renderPanel() and renderChart()
  */
 
-import { rankOrderWeights, runMethod, scoreToRank, METHODS } from './mcdm.js';
+import { rankOrderWeights, runMethod, scoreToRank } from './mcdm.js';
 import {
   parseAlternativesCSV,
   parseRankingsData,
@@ -32,8 +32,6 @@ import {
 const DEFAULT_TEAM = {
   criteriaOrder: [], // ['I1','I2',...] — index 0 = rank 1 (highest priority)
   selections:    [], // ['A1','A4',...] — selected alternatives
-  p:             0,  // weight exponent: 0 | 0.5 | 1
-  method:        'topsis',
   lastUpdated:   null,
   isDirty:       false, // unsaved local changes
   isSaving:      false
@@ -43,6 +41,8 @@ const state = {
   scriptUrl:    null,
   criteria:     [],   // [{id, name, shortName, type}]
   alternatives: [],   // [{id, description, values[]}]
+  p:            0,    // shared weight exponent: 0 | 0.5 | 1
+  method:       'topsis', // shared MCDM method
   teams: {
     team1: { ...DEFAULT_TEAM, name: 'Upper Basin' },
     team2: { ...DEFAULT_TEAM, name: 'Lower Basin' }
@@ -129,6 +129,16 @@ function applySheetData(data) {
   // Rankings
   if (data.rankings) {
     const rankData = parseRankingsData(data.rankings);
+    // Apply shared p/method from team1 data (or team2 if team1 absent),
+    // but only if neither team has unsaved local changes.
+    const anyDirty = state.teams.team1.isDirty || state.teams.team2.isDirty;
+    if (!anyDirty) {
+      const shared = rankData.team1 ?? rankData.team2;
+      if (shared) {
+        state.p      = shared.p;
+        state.method = shared.method;
+      }
+    }
     for (const teamId of ['team1', 'team2']) {
       const r = rankData[teamId];
       if (!r) continue;
@@ -136,10 +146,14 @@ function applySheetData(data) {
       if (state.teams[teamId].isDirty) continue;
       Object.assign(state.teams[teamId], {
         criteriaOrder: r.criteriaOrder,
-        selections:    r.selections,
-        p:             r.p,
-        method:        r.method
+        selections:    r.selections
       });
+      // Apply team name from sheet if provided
+      if (r.teamName) {
+        state.teams[teamId].name = r.teamName;
+        const nameEl = document.getElementById(`${teamId}-name`);
+        if (nameEl) nameEl.textContent = r.teamName;
+      }
     }
   }
 
@@ -189,7 +203,7 @@ function recompute(teamId) {
 
   const types   = orderedCriteria.map(c => c.type);
   const ranks   = orderedCriteria.map((_, i) => i + 1); // position = rank
-  const weights = rankOrderWeights(ranks, team.p);
+  const weights = rankOrderWeights(ranks, state.p); // shared p
 
   // Slice the value columns to match orderedCriteria
   const matrix = alternatives.map(alt =>
@@ -201,7 +215,7 @@ function recompute(teamId) {
 
   let scores;
   try {
-    scores = runMethod(team.method, matrix, weights, types);
+    scores = runMethod(state.method, matrix, weights, types); // shared method
   } catch {
     scores = alternatives.map(() => 0);
   }
@@ -223,14 +237,15 @@ function recompute(teamId) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function renderAllPanels() {
+  renderSharedSettings();
   renderPanel('team1');
   renderPanel('team2');
+  renderCombinedChart();
   renderSnapshotsList();
 }
 
 function renderPanel(teamId) {
   renderCriteriaList(teamId);
-  renderSettings(teamId);
   renderResults(teamId);
   renderChart(teamId);
 }
@@ -243,6 +258,12 @@ function renderCriteriaList(teamId) {
   // Maintain current Sortable instance
   if (listEl._sortable) { listEl._sortable.destroy(); }
 
+  // Compute weights for the current order and the shared p-value
+  const n = team.criteriaOrder.length;
+  const weights = n > 0
+    ? rankOrderWeights(team.criteriaOrder.map((_, i) => i + 1), state.p)
+    : [];
+
   listEl.innerHTML = '';
   team.criteriaOrder.forEach((criterionId, idx) => {
     const c = state.criteria.find(x => x.id === criterionId);
@@ -254,11 +275,13 @@ function renderCriteriaList(teamId) {
 
     const typeIcon  = c.type === 1 ? '↑' : '↓';
     const typeLabel = c.type === 1 ? 'benefit' : 'cost';
+    const weightPct = weights[idx] !== undefined ? (weights[idx] * 100).toFixed(1) + '%' : '';
 
     li.innerHTML = `
       <span class="drag-handle" aria-label="Drag to reorder">⠿</span>
       <span class="criterion-rank">${idx + 1}</span>
       <span class="criterion-name" title="${escHtml(c.name)}">${escHtml(c.shortName)}</span>
+      <span class="criterion-weight">${escHtml(weightPct)}</span>
       <span class="criterion-type ${typeLabel}" title="${typeLabel}: ${typeLabel === 'benefit' ? 'the higher the better' : 'the higher the worst'}">${typeIcon}</span>
     `;
     listEl.appendChild(li);
@@ -274,29 +297,26 @@ function renderCriteriaList(teamId) {
       state.teams[teamId].criteriaOrder = newOrder;
       state.teams[teamId].isDirty = true;
       recompute(teamId);
-      // Update rank numbers without full re-render (avoids disrupting drag)
-      listEl.querySelectorAll('.criterion-rank').forEach((el, i) => { el.textContent = i + 1; });
+      // Full re-render to update rank numbers and weights
+      renderCriteriaList(teamId);
       renderResults(teamId);
       renderChart(teamId);
+      renderCombinedChart();
       updateDirtyIndicator(teamId);
     }
   });
 }
 
-function renderSettings(teamId) {
-  const team = state.teams[teamId];
-
-  const slider = document.getElementById(`${teamId}-p-slider`);
+function renderSharedSettings() {
+  const slider = document.getElementById('shared-p-slider');
   if (slider) {
-    slider.value = String(team.p);
-    updatePLabel(teamId, team.p);
+    slider.value = String(state.p);
+    updatePLabel(state.p);
   }
-
-  document.querySelectorAll(`#${teamId}-panel .method-tab`).forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.method === team.method);
+  document.querySelectorAll('#shared-method-tabs .method-tab').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.method === state.method);
   });
-
-  updateDirtyIndicator(teamId);
+  for (const teamId of ['team1', 'team2']) updateDirtyIndicator(teamId);
 }
 
 function updateDirtyIndicator(teamId) {
@@ -344,16 +364,20 @@ function renderChart(teamId) {
   }
 
   // Read colors from CSS variables so they always match the current palette
-  const style       = getComputedStyle(document.documentElement);
-  const teamColor   = style.getPropertyValue(teamId === 'team1' ? '--team1' : '--team2').trim();
-  const selectedColor = style.getPropertyValue(teamId === 'team1' ? '--team1-dark' : '--team2-dark').trim();
-  const gridColor   = style.getPropertyValue('--border').trim();
-  const tickColor   = style.getPropertyValue('--text-muted').trim();
+  const style     = getComputedStyle(document.documentElement);
+  const teamColor = style.getPropertyValue(teamId === 'team1' ? '--team1' : '--team2').trim();
+  const gridColor = style.getPropertyValue('--border').trim();
+  const tickColor = style.getPropertyValue('--text-muted').trim();
 
   const labels  = results.map(r => r.id);
   const scores  = results.map(r => r.score);
-  const colors  = results.map(r => r.isSelected ? selectedColor : teamColor + 'aa');
-  const borders = results.map(r => r.isSelected ? selectedColor : teamColor);
+  // Colorblind-safe: selected = solid team color, unselected = very transparent.
+  // Uses rgba() so canvas receives an unambiguous color regardless of browser quirks.
+  const solid = teamColor;
+  const faint = _hexToRgba(teamColor, 0.40);
+  const faintBorder = _hexToRgba(teamColor, 0.65);
+  const colors  = results.map(r => r.isSelected ? solid : faint);
+  const borders = results.map(r => r.isSelected ? solid : faintBorder);
 
   const chartData = {
     labels,
@@ -367,11 +391,14 @@ function renderChart(teamId) {
   };
 
   if (canvas._chart) {
+    // Keep results reference fresh for tooltip lookups
+    canvas._results = results;
     canvas._chart.data = chartData;
     canvas._chart.update('none');
     return;
   }
 
+  canvas._results = results;
   canvas._chart = new Chart(canvas, {
     type: 'bar',
     data: chartData,
@@ -383,6 +410,12 @@ function renderChart(teamId) {
         legend: { display: false },
         tooltip: {
           callbacks: {
+            // Show full description on hover
+            title: ctx => {
+              const id = ctx[0]?.label;
+              const r = canvas._results?.find(x => x.id === id);
+              return r ? `${r.id}: ${r.description}` : (id || '');
+            },
             label: ctx => ` Score: ${ctx.parsed.x.toFixed(3)}`
           }
         }
@@ -422,6 +455,129 @@ function renderSnapshotsList() {
         `).join('');
 }
 
+function renderCombinedChart() {
+  const canvas = document.getElementById('combined-chart');
+  if (!canvas || typeof Chart === 'undefined') return;
+
+  const r1 = state.results.team1 ?? [];
+  const r2 = state.results.team2 ?? [];
+
+  if (!r1.length && !r2.length) {
+    if (canvas._chart) { canvas._chart.destroy(); canvas._chart = null; }
+    return;
+  }
+
+  const style         = getComputedStyle(document.documentElement);
+  const combinedColor = style.getPropertyValue('--combined').trim();
+  const team1Color    = style.getPropertyValue('--team1').trim();
+  const team2Color    = style.getPropertyValue('--team2').trim();
+  const gridColor     = style.getPropertyValue('--border').trim();
+  const tickColor     = style.getPropertyValue('--text-muted').trim();
+
+  const hasT1   = r1.length > 0;
+  const hasT2   = r2.length > 0;
+  const divisor = (hasT1 ? 1 : 0) + (hasT2 ? 1 : 0);
+  const team1Name = state.teams.team1.name || 'Upper Basin';
+  const team2Name = state.teams.team2.name || 'Lower Basin';
+
+  // Union of all alternative IDs
+  const allIds = [...new Set([...r1.map(r => r.id), ...r2.map(r => r.id)])];
+
+  // Build description map and per-team score lookups
+  const descMap = {};
+  for (const r of [...r1, ...r2]) descMap[r.id] = r.description;
+
+  // Sort by combined average score descending
+  const sorted = allIds
+    .map(id => {
+      const s1 = hasT1 ? (r1.find(r => r.id === id)?.score ?? null) : null;
+      const s2 = hasT2 ? (r2.find(r => r.id === id)?.score ?? null) : null;
+      const avg = divisor > 0 ? ((s1 ?? 0) + (s2 ?? 0)) / divisor : 0;
+      return { id, description: descMap[id] || id, score: avg, score1: s1, score2: s2 };
+    })
+    .sort((a, b) => b.score - a.score);
+
+  const labels = sorted.map(d => `${d.id}: ${d.description}`);
+
+  // Combined average bar (drawn first = at back)
+  const datasets = [{
+    type: 'bar',
+    label: 'Combined Average',
+    data: sorted.map(d => d.score),
+    backgroundColor: _hexToRgba(combinedColor, 0.80),
+    borderColor: combinedColor,
+    borderWidth: 1
+  }];
+
+  // Team score markers: line datasets with points only — no connecting line.
+  // pointStyle:'line' + pointRotation:90 draws a short vertical tick at each score.
+  const markerCfg = (color, name, scores) => ({
+    type: 'line',
+    label: name,
+    data: scores,
+    showLine: false,
+    pointStyle: 'line',
+    pointRadius: 10,
+    pointRotation: 90,
+    pointBorderColor: color,
+    pointBorderWidth: 3,
+    borderColor: color,
+    backgroundColor: color
+  });
+
+  if (hasT1) datasets.push(markerCfg(team1Color, team1Name, sorted.map(d => d.score1)));
+  if (hasT2) datasets.push(markerCfg(team2Color, team2Name, sorted.map(d => d.score2)));
+
+  const chartData = { labels, datasets };
+
+  if (canvas._chart) {
+    canvas._chart.data = chartData;
+    canvas._chart.update('none');
+    return;
+  }
+
+  canvas._chart = new Chart(canvas, {
+    type: 'bar',
+    data: chartData,
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          display: true,
+          position: 'bottom',
+          labels: {
+            color: tickColor, boxWidth: 14, padding: 16,
+            usePointStyle: true
+          }
+        },
+        tooltip: {
+          callbacks: {
+            title: ctx => ctx[0]?.label ?? '',
+            label: ctx => {
+              const v = ctx.parsed.x;
+              return ` ${ctx.dataset.label}: ${v != null ? v.toFixed(3) : 'N/A'}`;
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          min: 0,
+          title: { display: true, text: 'Score', color: tickColor },
+          ticks: { color: tickColor },
+          grid:  { color: gridColor }
+        },
+        y: {
+          ticks: { color: tickColor, font: { size: 11 } },
+          grid:  { color: gridColor }
+        }
+      }
+    }
+  });
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Event wiring
 // ─────────────────────────────────────────────────────────────────────────────
@@ -448,35 +604,37 @@ function wireGlobalButtons() {
   document.getElementById('team1-save-btn')?.addEventListener('click', () => saveRanking('team1'));
   document.getElementById('team2-save-btn')?.addEventListener('click', () => saveRanking('team2'));
 
-  // p-value sliders
-  ['team1', 'team2'].forEach(teamId => {
-    const slider = document.getElementById(`${teamId}-p-slider`);
-    slider?.addEventListener('input', () => {
-      const p = parseFloat(slider.value);
-      state.teams[teamId].p = p;
+  // Shared p-value slider — affects both teams
+  const sharedSlider = document.getElementById('shared-p-slider');
+  sharedSlider?.addEventListener('input', () => {
+    state.p = parseFloat(sharedSlider.value);
+    updatePLabel(state.p);
+    for (const teamId of ['team1', 'team2']) {
       state.teams[teamId].isDirty = true;
-      updatePLabel(teamId, p);
       recompute(teamId);
+      renderCriteriaList(teamId);
       renderResults(teamId);
       renderChart(teamId);
       updateDirtyIndicator(teamId);
-    });
+    }
+    renderCombinedChart();
   });
 
-  // Method tabs (event delegation on each panel)
-  document.querySelectorAll('.method-tab').forEach(btn => {
+  // Shared method tabs — affects both teams
+  document.querySelectorAll('#shared-method-tabs .method-tab').forEach(btn => {
     btn.addEventListener('click', () => {
-      const teamId = btn.closest('.team-panel')?.id?.replace('-panel', '');
-      if (!teamId) return;
-      state.teams[teamId].method  = btn.dataset.method;
-      state.teams[teamId].isDirty = true;
-      document.querySelectorAll(`#${teamId}-panel .method-tab`).forEach(b =>
+      state.method = btn.dataset.method;
+      document.querySelectorAll('#shared-method-tabs .method-tab').forEach(b =>
         b.classList.toggle('active', b === btn)
       );
-      recompute(teamId);
-      renderResults(teamId);
-      renderChart(teamId);
-      updateDirtyIndicator(teamId);
+      for (const teamId of ['team1', 'team2']) {
+        state.teams[teamId].isDirty = true;
+        recompute(teamId);
+        renderResults(teamId);
+        renderChart(teamId);
+        updateDirtyIndicator(teamId);
+      }
+      renderCombinedChart();
     });
   });
 
@@ -559,8 +717,9 @@ async function saveRanking(teamId) {
     await saveRankingToSheet(state.scriptUrl, teamId, {
       criteriaOrder: team.criteriaOrder,
       selections:    team.selections,
-      p:             team.p,
-      method:        team.method
+      p:             state.p,      // shared
+      method:        state.method, // shared
+      teamName:      team.name
     });
     team.isDirty = false;
     team.lastUpdated = new Date().toISOString();
@@ -625,6 +784,8 @@ function setStatus(type, message) {
 
 function _captureState() {
   return {
+    p:      state.p,
+    method: state.method,
     teams: {
       team1: { ...state.teams.team1 },
       team2: { ...state.teams.team2 }
@@ -637,13 +798,19 @@ function _captureState() {
 }
 
 function _restoreState(saved) {
+  if (saved.p      !== undefined) state.p      = saved.p;
+  if (saved.method !== undefined) state.method = saved.method;
+  // Support snapshots saved before shared-settings refactor
+  const legacyP      = saved.teams?.team1?.p      ?? saved.teams?.team2?.p;
+  const legacyMethod = saved.teams?.team1?.method  ?? saved.teams?.team2?.method;
+  if (state.p      === 0       && legacyP      !== undefined) state.p      = legacyP;
+  if (state.method === 'topsis' && legacyMethod !== undefined) state.method = legacyMethod;
+
   for (const teamId of ['team1', 'team2']) {
     if (saved.teams?.[teamId]) {
       Object.assign(state.teams[teamId], {
         criteriaOrder: saved.teams[teamId].criteriaOrder ?? [],
         selections:    saved.teams[teamId].selections    ?? [],
-        p:             saved.teams[teamId].p             ?? 0,
-        method:        saved.teams[teamId].method        ?? 'topsis',
         isDirty:       true  // restored state counts as unsaved
       });
     }
@@ -654,8 +821,8 @@ function _restoreState(saved) {
 // UI helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-function updatePLabel(teamId, p) {
-  const label = document.getElementById(`${teamId}-p-label`);
+function updatePLabel(p) {
+  const label = document.getElementById('shared-p-label');
   if (!label) return;
   const labels = { 0: 'Equal weights (p = 0)', 0.5: 'Moderate priority (p = 0.5)', 1: 'Strong priority (p = 1)' };
   label.textContent = labels[p] ?? `p = ${p}`;
@@ -671,6 +838,15 @@ function showToast(message, type = 'success') {
     toast.classList.remove('visible');
     setTimeout(() => toast.remove(), 300);
   }, 3000);
+}
+
+/** Convert a CSS hex color (#rrggbb) to rgba(r,g,b,alpha) for canvas compatibility. */
+function _hexToRgba(hex, alpha) {
+  const h = hex.replace('#', '');
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
 }
 
 function escHtml(str) {

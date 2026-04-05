@@ -1,44 +1,65 @@
 /* ──────────────────────────────────────────────────────────────────────────
-   Design tokens — IHE Delft brand palette
-   Primary:   Picton Blue   #2ea0ed
-   Secondary: Ultramarine   #0b0c80  (dark navy)
+   Design tokens — exact IHE Delft brand palette
+   Source: un-ihe.org computed stylesheet (April 2026)
+
+   IHE Delft source variables (preserved for reference):
+     --color--blue-100: #151f37   (dark navy — their primary text/bg)
+     --color--blue-300: #0d0f9f   (deep indigo)
+     --color--blue-400: #0040d5   (medium blue — their links)
+     --color--blue-600: #2ea0ed   (Picton Blue — their primary accent)
+     --color--blue-900: #eaf5fd   (very light blue tint)
+     --color--green-400: #3abf8f  (green accent)
+     --color--yellow-400: #fedc53 (warning)
+     --color--red-400: #dc3545    (error)
+     --color--bg-secondary: #151f37  (their dark header/footer bg)
+     --color--bg-tertiary: #0d0f9f   (deep blue section bg)
+     --color--border: rgba(46,160,237,0.1)
    ────────────────────────────────────────────────────────────────────────── */
 :root {
-  /* Core backgrounds */
-  --bg:          #06090f;   /* near-black, slight blue tint */
-  --surface:     #0d1526;   /* dark navy surface */
-  --surface2:    #162038;   /* slightly lighter card surface */
-  --border:      #1e3050;   /* subtle navy border */
+  /* Backgrounds — built from IHE's navy (#151f37) darkened for dashboard use */
+  --bg:          #0c111e;   /* deep navy, derived from --color--blue-100 */
+  --surface:     #151f37;   /* IHE --color--bg-secondary exactly */
+  --surface2:    #1c2a4a;   /* lighter layer above surface */
+  --border:      rgba(46, 160, 237, 0.15); /* IHE --color--border, slightly stronger */
 
   /* Text */
-  --text:        #e8eef5;
-  --text-muted:  #8aaac8;
-  --text-dim:    #4a6a88;
+  --text:        #f0f4fa;
+  --text-muted:  #8aabcc;
+  --text-dim:    #4a6a8a;
 
-  /* IHE Delft brand colors */
-  --ihe-blue:      #2ea0ed;   /* Picton Blue — primary accent */
-  --ihe-blue-dark: #1a78c2;   /* darker shade for hover / active */
-  --ihe-blue-glow: #2ea0ed22;
-  --ihe-navy:      #0b0c80;   /* Ultramarine — secondary */
-  --ihe-navy-mid:  #1214a8;
+  /* IHE Delft brand colors — exact values from their stylesheet */
+  --ihe-blue:      #2ea0ed;            /* --color--blue-600 */
+  --ihe-blue-dark: #0040d5;            /* --color--blue-400 — their link/hover color */
+  --ihe-blue-glow: rgba(46,160,237,0.1); /* --color--blue-600--rgba-10 */
+  --ihe-navy:      #151f37;            /* --color--blue-100 / --color--bg-secondary */
+  --ihe-navy-deep: #0d0f9f;            /* --color--blue-300 / --color--bg-tertiary */
 
-  /* Team accent colors — both from the IHE palette */
-  --team1:       #2ea0ed;         /* Upper Basin — Picton Blue */
-  --team1-dark:  #1a78c2;
-  --team1-glow:  #2ea0ed20;
-  --team2:       #00c4b0;         /* Lower Basin — teal complement to IHE blue */
-  --team2-dark:  #009e8e;
-  --team2-glow:  #00c4b020;
+  /* Team accent colors — both sourced from IHE palette */
+  --team1:       #2ea0ed;              /* Upper Basin — --color--blue-600 */
+  --team1-dark:  #0040d5;              /* --color--blue-400 */
+  --team1-glow:  rgba(46,160,237,0.12);
+  --team2:       #3abf8f;              /* Lower Basin — --color--green-400 */
+  --team2-dark:  #2a9970;
+  --team2-glow:  rgba(58,191,143,0.12);
 
-  /* Status colors */
-  --ok:          #22c55e;
-  --warn:        #f59e0b;
-  --error:       #ef4444;
-  --info:        #2ea0ed;
+  /* Combined ranking — amber/gold, distinct from both team colors */
+  --combined:      #f59e0b;
+  --combined-glow: rgba(245,158,11,0.12);
+
+  /* Status — IHE exact values */
+  --ok:          #3abf8f;   /* --color--success / --color--green-400 */
+  --warn:        #fedc53;   /* --color--warning / --color--yellow-400 */
+  --error:       #dc3545;   /* --color--error   / --color--red-400   */
+  --info:        #2ea0ed;   /* --color--blue-600 */
+
+  /* Fonts — IHE Delft typefaces */
+  --font-title:  'Poppins', 'Poppins-fallback', system-ui, sans-serif;
+  --font-body:   'PT Serif', 'PT Serif-fallback', Georgia, serif;
+  --font-ui:     'Poppins', 'Poppins-fallback', system-ui, sans-serif;
 
   --radius:      6px;
   --radius-lg:   10px;
-  --shadow:      0 4px 20px #00000060;
+  --shadow:      0 4px 20px rgba(0,0,0,0.5);
   --transition:  140ms ease;
 }
 
@@ -51,9 +72,20 @@ html { font-size: 15px; }
 body {
   background: var(--bg);
   color: var(--text);
-  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
-  line-height: 1.5;
+  font-family: var(--font-body);
+  line-height: 1.6;
   min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Headings, labels, buttons, nav use Poppins */
+h1, h2, h3, h4,
+.app-title, .team-header h2, .section-title,
+.setting-label, .method-tab, .btn-primary, .btn-secondary,
+.btn-save-ranking, .setup-guide-toggle, .snapshots-header h3,
+.team-badge, .landing-logo h1 {
+  font-family: var(--font-ui);
 }
 
 a { color: var(--ihe-blue); }
@@ -137,7 +169,7 @@ ul { list-style: none; }
   min-height: 100vh;
   padding: 2rem 1rem;
   background:
-    radial-gradient(ellipse 80% 50% at 50% -10%, #0b0c8030 0%, transparent 70%),
+    radial-gradient(ellipse 80% 50% at 50% -10%, rgba(13,15,159,0.25) 0%, transparent 70%),
     var(--bg);
 }
 
@@ -361,7 +393,7 @@ ul { list-style: none; }
    ────────────────────────────────────────────────────────────────────────── */
 .app-header {
   background: var(--ihe-navy);
-  border-bottom: 1px solid var(--ihe-navy-mid);
+  border-bottom: 1px solid var(--ihe-navy-deep);
   padding: .55rem 1.25rem;
   display: flex;
   align-items: center;
@@ -400,14 +432,14 @@ ul { list-style: none; }
   50%       { opacity: .35; }
 }
 
-#sync-status  { font-size: .8rem; color: #a0c4e8; }
-#last-synced  { font-size: .78rem; color: #5a86a8; }
+#sync-status  { font-size: .8rem; color: rgba(46,160,237,0.7); }
+#last-synced  { font-size: .78rem; color: rgba(46,160,237,0.4); }
 
 .header-right .btn-secondary {
   padding: .3rem .85rem;
   font-size: .82rem;
-  border-color: #1e3a60;
-  color: #a0c4e8;
+  border-color: rgba(46,160,237,0.2);   /* --color--border from IHE */
+  color: rgba(46,160,237,0.7);
 }
 .header-right .btn-secondary:hover { border-color: var(--ihe-blue); color: #fff; }
 
@@ -523,12 +555,22 @@ ul { list-style: none; }
   white-space: nowrap;
 }
 
+.criterion-weight {
+  font-size: .72rem;
+  font-family: monospace;
+  color: var(--text-dim);
+  flex-shrink: 0;
+  width: 3.2rem;
+  text-align: right;
+}
+
 .criterion-type {
-  font-size: .75rem;
+  font-size: .82rem;
   font-weight: 700;
   flex-shrink: 0;
-  width: 1.4rem;
+  width: 1.6rem;
   text-align: center;
+  margin-left: .15rem;
 }
 .criterion-type.benefit { color: var(--ok); }
 .criterion-type.cost    { color: var(--error); }
@@ -695,6 +737,69 @@ ul { list-style: none; }
   position: relative;
   height: 280px;
   padding: .25rem 0;
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Combined ranking + shared settings
+   ────────────────────────────────────────────────────────────────────────── */
+.combined-section {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 1rem 1.25rem 1.25rem;
+}
+
+.combined-header {
+  display: flex;
+  align-items: baseline;
+  gap: .75rem;
+  margin-bottom: .75rem;
+}
+.combined-header h3 {
+  font-size: .95rem;
+  font-weight: 700;
+  font-family: var(--font-ui);
+  color: var(--combined);
+}
+.combined-subtitle {
+  font-size: .78rem;
+  color: var(--text-dim);
+}
+
+.chart-wrap-combined {
+  height: 480px;
+}
+
+/* Shared Weighting & Method (sits between combined chart and team panels) */
+.shared-settings {
+  background: var(--surface2);
+  border-bottom: 1px solid var(--border);
+  padding: .85rem 1.25rem;
+}
+
+.shared-settings-inner {
+  display: flex;
+  align-items: flex-start;
+  gap: 2.5rem;
+  max-width: 680px;
+  margin: 0 auto;
+}
+
+.shared-setting-block { flex: 1; min-width: 0; }
+
+/* Shared p-slider thumb — amber/combined color */
+.shared-slider::-webkit-slider-thumb {
+  background:  var(--combined);
+  box-shadow:  0 0 0 2px var(--combined);
+}
+
+/* Shared method tabs — amber active state */
+#shared-method-tabs .method-tab.active {
+  background: var(--combined);
+  color: #fff;
+}
+
+@media (max-width: 560px) {
+  .shared-settings-inner { flex-direction: column; gap: 1rem; }
 }
 
 /* ──────────────────────────────────────────────────────────────────────────

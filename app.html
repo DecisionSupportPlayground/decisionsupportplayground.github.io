@@ -4,6 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>MADM Decision Maker</title>
+  <!-- IHE Delft fonts: Poppins (headings/UI) + PT Serif (body).
+       Loaded from Google Fonts. Falls back to system-ui / Georgia without connectivity. -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&family=PT+Serif:ital,wght@0,400;0,700;1,400&display=swap">
   <link rel="stylesheet" href="css/styles.css">
   <!-- Vendored libraries (no CDN calls; works offline once loaded) -->
   <script src="vendor/papaparse.min.js"></script>
@@ -26,6 +31,51 @@
     </div>
   </header>
 
+  <!-- ── Combined ranking ─────────────────────────────────────────────────── -->
+  <div class="combined-section">
+    <div class="combined-header">
+      <h3>Combined Ranking</h3>
+      <span class="combined-subtitle">Both teams' scores and their combined average</span>
+    </div>
+    <div class="chart-wrap chart-wrap-combined">
+      <canvas id="combined-chart"></canvas>
+    </div>
+  </div>
+
+  <!-- ── Shared Weighting & Method ─────────────────────────────────────────── -->
+  <div class="shared-settings">
+    <div class="shared-settings-inner">
+
+      <!-- p-value slider -->
+      <div class="shared-setting-block">
+        <div class="setting-label">Weight Exponent (p) — applies to both teams</div>
+        <div class="p-slider-wrap">
+          <input id="shared-p-slider" class="p-slider shared-slider"
+                 type="range" min="0" max="1" step="0.5" value="0"
+                 list="p-datalist">
+          <div class="p-tick-labels">
+            <span>Equal (0)</span>
+            <span>Moderate (0.5)</span>
+            <span>Linear (1)</span>
+          </div>
+        </div>
+        <div id="shared-p-label" class="p-value-label">Equal weights (p = 0)</div>
+      </div>
+
+      <!-- MCDM method -->
+      <div class="shared-setting-block">
+        <div class="setting-label">MCDM Method — applies to both teams</div>
+        <div class="method-tabs" id="shared-method-tabs">
+          <button class="method-tab active" data-method="topsis">TOPSIS</button>
+          <button class="method-tab"        data-method="saw">SAW</button>
+          <button class="method-tab"        data-method="mabac">MABAC</button>
+          <button class="method-tab"        data-method="aras">ARAS</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
   <!-- ── Two-team panels ────────────────────────────────────────────────── -->
   <div class="teams-container">
 
@@ -33,51 +83,26 @@
     <div class="team-panel team1" id="team1-panel">
 
       <div class="team-header">
-        <h2>Upper Basin</h2>
+        <h2 id="team1-name">Upper Basin</h2>
         <span class="team-badge">Team 1</span>
       </div>
+
+      <!-- Chart -->
+      <section class="panel-section">
+        <div class="section-title">Score Chart</div>
+        <div class="section-body">
+          <div class="chart-wrap">
+            <canvas id="team1-chart"></canvas>
+          </div>
+        </div>
+      </section>
 
       <!-- Criteria ranking -->
       <section class="panel-section">
         <div class="section-title">Criteria Priority — drag to reorder</div>
         <div class="section-body" style="padding:.5rem;">
           <ul id="team1-criteria-list" class="criteria-list"></ul>
-        </div>
-      </section>
-
-      <!-- Settings -->
-      <section class="panel-section">
-        <div class="section-title">Weighting &amp; Method</div>
-        <div class="section-body settings-grid">
-
-          <!-- p-value slider -->
-          <div>
-            <div class="setting-label">Weight Exponent (p)</div>
-            <div class="p-slider-wrap">
-              <input id="team1-p-slider" class="p-slider"
-                     type="range" min="0" max="1" step="0.5" value="0"
-                     list="p-datalist">
-              <div class="p-tick-labels">
-                <span>Equal (0)</span>
-                <span>Moderate (0.5)</span>
-                <span>Linear (1)</span>
-              </div>
-            </div>
-            <div id="team1-p-label" class="p-value-label">Equal weights (p = 0)</div>
-          </div>
-
-          <!-- MCDM method -->
-          <div>
-            <div class="setting-label">MCDM Method</div>
-            <div class="method-tabs">
-              <button class="method-tab active" data-method="topsis">TOPSIS</button>
-              <button class="method-tab"        data-method="saw">SAW</button>
-              <button class="method-tab"        data-method="mabac">MABAC</button>
-              <button class="method-tab"        data-method="aras">ARAS</button>
-            </div>
-          </div>
-
-          <button id="team1-save-btn" class="btn-save-ranking">Save Ranking</button>
+          <button id="team1-save-btn" class="btn-save-ranking" style="margin-top:.5rem;">Save Ranking</button>
         </div>
       </section>
 
@@ -105,16 +130,6 @@
         </div>
       </section>
 
-      <!-- Chart -->
-      <section class="panel-section">
-        <div class="section-title">Score Chart</div>
-        <div class="section-body">
-          <div class="chart-wrap">
-            <canvas id="team1-chart"></canvas>
-          </div>
-        </div>
-      </section>
-
     </div><!-- /team1-panel -->
 
     <!-- Resize divider -->
@@ -124,49 +139,26 @@
     <div class="team-panel team2" id="team2-panel">
 
       <div class="team-header">
-        <h2>Lower Basin</h2>
+        <h2 id="team2-name">Lower Basin</h2>
         <span class="team-badge">Team 2</span>
       </div>
+
+      <!-- Chart -->
+      <section class="panel-section">
+        <div class="section-title">Score Chart</div>
+        <div class="section-body">
+          <div class="chart-wrap">
+            <canvas id="team2-chart"></canvas>
+          </div>
+        </div>
+      </section>
 
       <!-- Criteria ranking -->
       <section class="panel-section">
         <div class="section-title">Criteria Priority — drag to reorder</div>
         <div class="section-body" style="padding:.5rem;">
           <ul id="team2-criteria-list" class="criteria-list"></ul>
-        </div>
-      </section>
-
-      <!-- Settings -->
-      <section class="panel-section">
-        <div class="section-title">Weighting &amp; Method</div>
-        <div class="section-body settings-grid">
-
-          <div>
-            <div class="setting-label">Weight Exponent (p)</div>
-            <div class="p-slider-wrap">
-              <input id="team2-p-slider" class="p-slider"
-                     type="range" min="0" max="1" step="0.5" value="0"
-                     list="p-datalist">
-              <div class="p-tick-labels">
-                <span>Equal (0)</span>
-                <span>Moderate (0.5)</span>
-                <span>Linear (1)</span>
-              </div>
-            </div>
-            <div id="team2-p-label" class="p-value-label">Equal weights (p = 0)</div>
-          </div>
-
-          <div>
-            <div class="setting-label">MCDM Method</div>
-            <div class="method-tabs">
-              <button class="method-tab active" data-method="topsis">TOPSIS</button>
-              <button class="method-tab"        data-method="saw">SAW</button>
-              <button class="method-tab"        data-method="mabac">MABAC</button>
-              <button class="method-tab"        data-method="aras">ARAS</button>
-            </div>
-          </div>
-
-          <button id="team2-save-btn" class="btn-save-ranking">Save Ranking</button>
+          <button id="team2-save-btn" class="btn-save-ranking" style="margin-top:.5rem;">Save Ranking</button>
         </div>
       </section>
 
@@ -191,16 +183,6 @@
             </thead>
             <tbody id="team2-results-body"></tbody>
           </table>
-        </div>
-      </section>
-
-      <!-- Chart -->
-      <section class="panel-section">
-        <div class="section-title">Score Chart</div>
-        <div class="section-body">
-          <div class="chart-wrap">
-            <canvas id="team2-chart"></canvas>
-          </div>
         </div>
       </section>
 

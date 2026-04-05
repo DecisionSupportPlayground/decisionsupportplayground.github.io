@@ -124,34 +124,78 @@ export function parseAlternativesCSV(csvText) {
 /**
  * Parse the raw 2D array returned by the Apps Script for the Rankings tab.
  *
- * Expected sheet layout:
+ * New format (one row per criterion per team):
+ *   Row 0 (header): ["team","teamName","criterionId","rank","p","method","selections","lastUpdated"]
+ *   Row 1+: ["team1","Upper Basin","I4",1,0,"topsis",'["A1"]',"ISO-timestamp"]
+ *   ...one row per criterion for each team
+ *
+ * Legacy format (one row per team with JSON arrays — still supported for
+ * spreadsheets initialized before the format change):
  *   Row 0 (header): ["team","criteriaOrder","selections","p","method","lastUpdated"]
  *   Row 1: ["team1", JSON-array, JSON-array, number, string, ISO-timestamp]
- *   Row 2: ["team2", ...]
  *
  * @param {any[][]} rows  Raw 2D array from the sheet.
  * @returns {{
- *   team1: {criteriaOrder:string[], selections:string[], p:number, method:string} | null,
- *   team2: {criteriaOrder:string[], selections:string[], p:number, method:string} | null
+ *   team1: {teamName:string, criteriaOrder:string[], selections:string[], p:number, method:string} | null,
+ *   team2: {teamName:string, criteriaOrder:string[], selections:string[], p:number, method:string} | null
  * }}
  */
 export function parseRankingsData(rows) {
   const result = { team1: null, team2: null };
-  for (let i = 1; i < rows.length; i++) {
-    const row = rows[i];
-    const team = String(row[0] ?? '').trim();
-    if (team !== 'team1' && team !== 'team2') continue;
-    try {
-      result[team] = {
-        criteriaOrder: JSON.parse(row[1] || '[]'),
-        selections:    JSON.parse(row[2] || '[]'),
-        p:             parseFloat(row[3]) || 0,
-        method:        String(row[4] || 'topsis').trim().toLowerCase()
-      };
-    } catch {
-      console.warn(`Could not parse rankings row for ${team}`);
+  if (!rows || rows.length < 2) return result;
+
+  // Detect format from header row:
+  //   new format col 1 header = "teamName", col 2 header = "criterionId"
+  //   legacy format col 1 header = "criteriaOrder"
+  const header = rows[0].map(h => String(h ?? '').trim().toLowerCase());
+  const isNewFormat = header[1] === 'teamname' || header[2] === 'criterionid';
+
+  if (isNewFormat) {
+    // New format: one row per criterion per team
+    const byTeam = { team1: [], team2: [] };
+    for (let i = 1; i < rows.length; i++) {
+      const row = rows[i];
+      const team = String(row[0] ?? '').trim();
+      if (team === 'team1' || team === 'team2') byTeam[team].push(row);
+    }
+    for (const team of ['team1', 'team2']) {
+      const teamRows = byTeam[team];
+      if (!teamRows.length) continue;
+      // Sort rows by rank column (index 3)
+      teamRows.sort((a, b) => Number(a[3]) - Number(b[3]));
+      const firstRow = teamRows[0];
+      try {
+        result[team] = {
+          teamName:     String(firstRow[1] ?? '').trim(),
+          criteriaOrder: teamRows.map(r => String(r[2] ?? '').trim()).filter(Boolean),
+          selections:   JSON.parse(String(firstRow[6] ?? '') || '[]'),
+          p:            parseFloat(firstRow[4]) || 0,
+          method:       String(firstRow[5] || 'topsis').trim().toLowerCase()
+        };
+      } catch {
+        console.warn(`Could not parse new-format rankings for ${team}`);
+      }
+    }
+  } else {
+    // Legacy format: one row per team with JSON arrays
+    for (let i = 1; i < rows.length; i++) {
+      const row = rows[i];
+      const team = String(row[0] ?? '').trim();
+      if (team !== 'team1' && team !== 'team2') continue;
+      try {
+        result[team] = {
+          teamName:     '',
+          criteriaOrder: JSON.parse(String(row[1] ?? '') || '[]'),
+          selections:   JSON.parse(String(row[2] ?? '') || '[]'),
+          p:            parseFloat(row[3]) || 0,
+          method:       String(row[4] || 'topsis').trim().toLowerCase()
+        };
+      } catch {
+        console.warn(`Could not parse legacy rankings for ${team}`);
+      }
     }
   }
+
   return result;
 }
 

@@ -105,44 +105,65 @@ function doPost(e) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Upserts one team row in the Rankings tab.
+ * Writes one team's ranking to the Rankings tab — one row per criterion.
  *
- * Rankings tab layout:
+ * Rankings tab layout (one row per criterion per team):
  *   Col A: team          ("team1" | "team2")
- *   Col B: criteriaOrder (JSON array of criterion IDs, e.g. ["I1","I2",...])
- *   Col C: selections    (JSON array of alternative IDs,  e.g. ["A1","A4",...])
- *   Col D: p             (number: 0 | 0.5 | 1)
- *   Col E: method        (string: "topsis" | "saw" | "mabac" | "aras")
- *   Col F: lastUpdated   (ISO timestamp)
+ *   Col B: teamName      (human-readable, e.g. "Upper Basin")
+ *   Col C: criterionId   (e.g. "I1", "I4")
+ *   Col D: rank          (1-based integer — 1 = highest priority)
+ *   Col E: p             (number: 0 | 0.5 | 1)
+ *   Col F: method        (string: "topsis" | "saw" | "mabac" | "aras")
+ *   Col G: selections    (JSON array of selected alternative IDs)
+ *   Col H: lastUpdated   (ISO timestamp)
+ *
+ * All existing rows for the team are replaced on every save.
+ * Team metadata (p, method, selections, teamName) is repeated in every row
+ * so the sheet is readable without a JOIN.
  */
 function _saveRankings(team, rankings) {
   var sheet = _getOrCreateSheet(TAB_RANKINGS);
+  var HEADER = ['team', 'teamName', 'criterionId', 'rank', 'p', 'method', 'selections', 'lastUpdated'];
+  var COLS   = HEADER.length;
 
-  // Ensure header row exists
-  if (sheet.getLastRow() === 0) {
-    sheet.appendRow(['team', 'criteriaOrder', 'selections', 'p', 'method', 'lastUpdated']);
+  var criteriaOrder = rankings.criteriaOrder || [];
+  var timestamp     = new Date().toISOString();
+  var selectionsStr = JSON.stringify(rankings.selections || []);
+  var p             = rankings.p      !== undefined ? rankings.p      : 0;
+  var method        = rankings.method !== undefined ? rankings.method : 'topsis';
+  var teamName      = rankings.teamName || '';
+
+  // Build new rows for this team (one per criterion)
+  var newTeamRows = criteriaOrder.map(function(cId, j) {
+    return [team, teamName, cId, j + 1, p, method, selectionsStr, timestamp];
+  });
+
+  // Read the existing sheet, keeping the other team's rows.
+  // Only keep rows in the NEW format (col 2 = criterionId like "I1", not a JSON array).
+  // Discarding old-format rows prevents format-mismatch corruption when migrating
+  // from the legacy single-row-per-team layout.
+  var otherRows = [];
+  var lastRow = sheet.getLastRow();
+  if (lastRow > 1) {
+    var existingData = sheet.getRange(2, 1, lastRow - 1, COLS).getValues();
+    for (var i = 0; i < existingData.length; i++) {
+      var rowTeam = String(existingData[i][0]).trim();
+      if (rowTeam !== '' && rowTeam !== team) {
+        // Criterion IDs look like "I1", "I2" — they never start with "[".
+        // Old-format rows had a JSON array in column 2; skip them silently so the
+        // other team will re-save their own data from local browser state.
+        var col2 = String(existingData[i][2] || '');
+        if (col2.length > 0 && col2.charAt(0) !== '[') {
+          otherRows.push(existingData[i]);
+        }
+      }
+    }
   }
 
-  var data = sheet.getDataRange().getValues();
-  var rowIdx = -1;
-  for (var i = 1; i < data.length; i++) {
-    if (data[i][0] === team) { rowIdx = i + 1; break; } // 1-based
-  }
-
-  var newRow = [
-    team,
-    JSON.stringify(rankings.criteriaOrder || []),
-    JSON.stringify(rankings.selections    || []),
-    rankings.p      !== undefined ? rankings.p      : 0,
-    rankings.method !== undefined ? rankings.method : 'topsis',
-    new Date().toISOString()
-  ];
-
-  if (rowIdx > 0) {
-    sheet.getRange(rowIdx, 1, 1, newRow.length).setValues([newRow]);
-  } else {
-    sheet.appendRow(newRow);
-  }
+  // Rebuild: header + other team's rows + new team rows — write in one batch
+  var allRows = [HEADER].concat(otherRows).concat(newTeamRows);
+  sheet.clearContents();
+  sheet.getRange(1, 1, allRows.length, COLS).setValues(allRows);
 
   _touchLastModified();
 }
@@ -295,20 +316,23 @@ function initializeSheets() {
   // ── Rankings tab ─────────────────────────────────────────────────────────
   var rankSheet = _getOrCreateSheet(TAB_RANKINGS);
   if (rankSheet.getLastRow() === 0) {
-    rankSheet.appendRow(['team','criteriaOrder','selections','p','method','lastUpdated']);
-    // Default state from DATA_Ranking.csv
-    rankSheet.appendRow([
-      'team1',
-      JSON.stringify(['I4','I1','I7','I9','I6','I5','I8','I10','I3','I2']),
-      JSON.stringify(['A1','A4','A5','A7.3','A9','A12']),
-      0, 'topsis', new Date().toISOString()
-    ]);
-    rankSheet.appendRow([
-      'team2',
-      JSON.stringify(['I2','I3','I8','I10','I4','I5','I6','I9','I7','I1']),
-      JSON.stringify(['A4','A6.2','A7','A7.1','A9','A11.2']),
-      0, 'topsis', new Date().toISOString()
-    ]);
+    // Default state from DATA_Ranking.csv — one row per criterion per team.
+    // Use a single setValues() batch (not appendRow loops) to avoid the
+    // 30-second Apps Script execution limit timing out after only one team's rows.
+    var RANK_HEADER     = ['team', 'teamName', 'criterionId', 'rank', 'p', 'method', 'selections', 'lastUpdated'];
+    var team1Criteria   = ['I4','I1','I7','I9','I6','I5','I8','I10','I3','I2'];
+    var team2Criteria   = ['I2','I3','I8','I10','I4','I5','I6','I9','I7','I1'];
+    var team1Selections = JSON.stringify(['A1','A4','A5','A7.3','A9','A12']);
+    var team2Selections = JSON.stringify(['A4','A6.2','A7','A7.1','A9','A11.2']);
+    var now             = new Date().toISOString();
+    var rankRows = [RANK_HEADER];
+    for (var ri = 0; ri < team1Criteria.length; ri++) {
+      rankRows.push(['team1', 'Upper Basin',  team1Criteria[ri], ri + 1, 0, 'topsis', team1Selections, now]);
+    }
+    for (var ri = 0; ri < team2Criteria.length; ri++) {
+      rankRows.push(['team2', 'Lower Basin', team2Criteria[ri], ri + 1, 0, 'topsis', team2Selections, now]);
+    }
+    rankSheet.getRange(1, 1, rankRows.length, RANK_HEADER.length).setValues(rankRows);
   }
 
   // ── Snapshots tab ────────────────────────────────────────────────────────
@@ -334,7 +358,7 @@ function showHelp() {
     'This spreadsheet is the data backend for the MADM Decision Maker web app.\n\n' +
     'Tabs:\n' +
     '  Alternatives — the decision matrix (edit this with your alternatives data)\n' +
-    '  Rankings     — team rankings saved by the web app (do not edit manually)\n' +
+    '  Rankings     — team rankings (one row per criterion per team; do not edit manually)\n' +
     '  Snapshots    — saved decision snapshots (do not edit manually)\n\n' +
     'For setup instructions, see SETUP.md in the project repository.'
   );

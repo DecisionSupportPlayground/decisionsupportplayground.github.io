@@ -123,15 +123,25 @@ describe('parseAlternativesCSV', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('parseRankingsData', () => {
+  // New format: one row per criterion per team
   const ROWS = [
-    ['team', 'criteriaOrder', 'selections', 'p', 'method', 'lastUpdated'],
-    ['team1', '["I1","I2","I3"]', '["A1","A4"]', 0.5, 'topsis', '2026-04-04T12:00:00Z'],
-    ['team2', '["I3","I1","I2"]', '["A2","A5"]', 1,   'saw',    '2026-04-04T12:01:00Z']
+    ['team', 'teamName', 'criterionId', 'rank', 'p', 'method', 'selections', 'lastUpdated'],
+    ['team1', 'Upper Basin', 'I1', 1, 0.5, 'topsis', '["A1","A4"]', '2026-04-04T12:00:00Z'],
+    ['team1', 'Upper Basin', 'I2', 2, 0.5, 'topsis', '["A1","A4"]', '2026-04-04T12:00:00Z'],
+    ['team1', 'Upper Basin', 'I3', 3, 0.5, 'topsis', '["A1","A4"]', '2026-04-04T12:00:00Z'],
+    ['team2', 'Lower Basin', 'I3', 1, 1,   'saw',    '["A2","A5"]', '2026-04-04T12:01:00Z'],
+    ['team2', 'Lower Basin', 'I1', 2, 1,   'saw',    '["A2","A5"]', '2026-04-04T12:01:00Z'],
+    ['team2', 'Lower Basin', 'I2', 3, 1,   'saw',    '["A2","A5"]', '2026-04-04T12:01:00Z'],
   ];
 
   it('parses team1 criteriaOrder', () => {
     const { team1 } = parseRankingsData(ROWS);
     assert.deepStrictEqual(team1.criteriaOrder, ['I1', 'I2', 'I3']);
+  });
+
+  it('parses team2 criteriaOrder (sorted by rank)', () => {
+    const { team2 } = parseRankingsData(ROWS);
+    assert.deepStrictEqual(team2.criteriaOrder, ['I3', 'I1', 'I2']);
   });
 
   it('parses team2 method', () => {
@@ -144,11 +154,23 @@ describe('parseRankingsData', () => {
     assert.strictEqual(team1.p, 0.5);
   });
 
+  it('parses teamName', () => {
+    const { team1, team2 } = parseRankingsData(ROWS);
+    assert.strictEqual(team1.teamName, 'Upper Basin');
+    assert.strictEqual(team2.teamName, 'Lower Basin');
+  });
+
+  it('parses selections from first row', () => {
+    const { team1 } = parseRankingsData(ROWS);
+    assert.deepStrictEqual(team1.selections, ['A1', 'A4']);
+  });
+
   it('returns null for a missing team', () => {
-    const { team1, team2 } = parseRankingsData([
-      ['team', 'criteriaOrder', 'selections', 'p', 'method', 'lastUpdated'],
-      ['team1', '[]', '[]', 0, 'topsis', '']
-    ]);
+    const rows = [
+      ['team', 'teamName', 'criterionId', 'rank', 'p', 'method', 'selections', 'lastUpdated'],
+      ['team1', 'Upper Basin', 'I1', 1, 0, 'topsis', '[]', '']
+    ];
+    const { team1, team2 } = parseRankingsData(rows);
     assert.ok(team1 !== null);
     assert.strictEqual(team2, null);
   });
@@ -157,6 +179,17 @@ describe('parseRankingsData', () => {
     const { team1, team2 } = parseRankingsData([]);
     assert.strictEqual(team1, null);
     assert.strictEqual(team2, null);
+  });
+
+  it('handles legacy format (JSON arrays in single cells)', () => {
+    const legacyRows = [
+      ['team', 'criteriaOrder', 'selections', 'p', 'method', 'lastUpdated'],
+      ['team1', '["I1","I2","I3"]', '["A1","A4"]', 0.5, 'topsis', '2026-04-04T12:00:00Z'],
+      ['team2', '["I3","I1","I2"]', '["A2","A5"]', 1,   'saw',    '2026-04-04T12:01:00Z']
+    ];
+    const { team1, team2 } = parseRankingsData(legacyRows);
+    assert.deepStrictEqual(team1.criteriaOrder, ['I1', 'I2', 'I3']);
+    assert.strictEqual(team2.method, 'saw');
   });
 });
 
