@@ -1,0 +1,26 @@
+4,Order displayed,Upper Basin,Lower Basin,,Alternatives Upper Basin,Alternatives Lower Basin,,,,,
+"Bird Habitat Index (-)
+(the higher the better)",1,4,4,,A1,A4,,,,,
+"Overall Energy Generation (GWh/year)
+(the higher the better)",2,1,10,,A4,A6.2,,,,,
+"Navigability of Big Vessels (days/year)
+(the higher the better)",3,10,1,,A5,A7,,,,,
+"Navigability of Medium Vessels (days/year)
+(the higher the better)",4,9,5,,A7.3,A7.1,,,,,
+"Navigability of Small Vessels (days/year)
+(the higher the better)",5,6,6,,A9,A9,,,,,
+"(Catchment) Evaporation Downstream (m3)
+(the higher the worst)",6,8,7,,A12,A11.2,,,,,
+"(Catchment) Evaporation Upstream (m3)
+(the higher the worst)",7,3,9,,,,,,,,
+"Wetland Evaporation (m3)
+(the higher the worst)",8,7,2,,,,,,,,
+"Food Production Downstream (tons/year)
+(the higher the better)",9,5,3,,,,,,,,
+"Food Production Upstream (tons/year)
+(the higher the better)",10,2,8,,,,,,,,
+,,,,,,,,,,,
+,,,,,,,,,,,
+,,,,,,,,,,,
+,,,,,,,,,,,
+,,,,,,,,,,,

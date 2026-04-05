@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MADM Decision Maker</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <!-- Vendored libraries (no CDN calls; works offline once loaded) -->
+  <script src="vendor/papaparse.min.js"></script>
+  <script src="vendor/chart.umd.min.js"></script>
+  <script src="vendor/Sortable.min.js"></script>
+</head>
+<body>
+
+  <!-- ── Header ─────────────────────────────────────────────────────────── -->
+  <header class="app-header">
+    <div class="header-left">
+      <span class="app-title">MADM <span>Decision Maker</span></span>
+      <span id="sync-dot" class="sync-dot loading" title="Connecting…"></span>
+      <span id="sync-status" class="loading">Connecting…</span>
+    </div>
+    <div class="header-right">
+      <span id="last-synced"></span>
+      <button id="refresh-btn" class="btn-secondary">Refresh Now</button>
+      <button id="disconnect-btn" class="btn-secondary">Disconnect</button>
+    </div>
+  </header>
+
+  <!-- ── Two-team panels ────────────────────────────────────────────────── -->
+  <div class="teams-container">
+
+    <!-- ── Team 1 (Upper Basin) ──────────────────────────────────────────── -->
+    <div class="team-panel team1" id="team1-panel">
+
+      <div class="team-header">
+        <h2>Upper Basin</h2>
+        <span class="team-badge">Team 1</span>
+      </div>
+
+      <!-- Criteria ranking -->
+      <section class="panel-section">
+        <div class="section-title">Criteria Priority — drag to reorder</div>
+        <div class="section-body" style="padding:.5rem;">
+          <ul id="team1-criteria-list" class="criteria-list"></ul>
+        </div>
+      </section>
+
+      <!-- Settings -->
+      <section class="panel-section">
+        <div class="section-title">Weighting &amp; Method</div>
+        <div class="section-body settings-grid">
+
+          <!-- p-value slider -->
+          <div>
+            <div class="setting-label">Weight Exponent (p)</div>
+            <div class="p-slider-wrap">
+              <input id="team1-p-slider" class="p-slider"
+                     type="range" min="0" max="1" step="0.5" value="0"
+                     list="p-datalist">
+              <div class="p-tick-labels">
+                <span>Equal (0)</span>
+                <span>Moderate (0.5)</span>
+                <span>Linear (1)</span>
+              </div>
+            </div>
+            <div id="team1-p-label" class="p-value-label">Equal weights (p = 0)</div>
+          </div>
+
+          <!-- MCDM method -->
+          <div>
+            <div class="setting-label">MCDM Method</div>
+            <div class="method-tabs">
+              <button class="method-tab active" data-method="topsis">TOPSIS</button>
+              <button class="method-tab"        data-method="saw">SAW</button>
+              <button class="method-tab"        data-method="mabac">MABAC</button>
+              <button class="method-tab"        data-method="aras">ARAS</button>
+            </div>
+          </div>
+
+          <button id="team1-save-btn" class="btn-save-ranking">Save Ranking</button>
+        </div>
+      </section>
+
+      <!-- Results -->
+      <section class="panel-section">
+        <div class="section-title">Ranked Alternatives</div>
+        <div class="section-body">
+          <div class="filter-row">
+            <input id="team1-filter-selected" class="filter-checkbox"
+                   type="checkbox" data-team="team1">
+            <label for="team1-filter-selected">Show selected alternatives only</label>
+          </div>
+          <table class="results-table">
+            <thead>
+              <tr>
+                <th class="rank-cell">#</th>
+                <th class="id-cell">ID</th>
+                <th class="desc-cell">Description</th>
+                <th class="score-cell">Score</th>
+                <th class="sel-cell" title="Mark as selected">★</th>
+              </tr>
+            </thead>
+            <tbody id="team1-results-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Chart -->
+      <section class="panel-section">
+        <div class="section-title">Score Chart</div>
+        <div class="section-body">
+          <div class="chart-wrap">
+            <canvas id="team1-chart"></canvas>
+          </div>
+        </div>
+      </section>
+
+    </div><!-- /team1-panel -->
+
+    <!-- Resize divider -->
+    <div class="teams-divider" aria-hidden="true"></div>
+
+    <!-- ── Team 2 (Lower Basin) ──────────────────────────────────────────── -->
+    <div class="team-panel team2" id="team2-panel">
+
+      <div class="team-header">
+        <h2>Lower Basin</h2>
+        <span class="team-badge">Team 2</span>
+      </div>
+
+      <!-- Criteria ranking -->
+      <section class="panel-section">
+        <div class="section-title">Criteria Priority — drag to reorder</div>
+        <div class="section-body" style="padding:.5rem;">
+          <ul id="team2-criteria-list" class="criteria-list"></ul>
+        </div>
+      </section>
+
+      <!-- Settings -->
+      <section class="panel-section">
+        <div class="section-title">Weighting &amp; Method</div>
+        <div class="section-body settings-grid">
+
+          <div>
+            <div class="setting-label">Weight Exponent (p)</div>
+            <div class="p-slider-wrap">
+              <input id="team2-p-slider" class="p-slider"
+                     type="range" min="0" max="1" step="0.5" value="0"
+                     list="p-datalist">
+              <div class="p-tick-labels">
+                <span>Equal (0)</span>
+                <span>Moderate (0.5)</span>
+                <span>Linear (1)</span>
+              </div>
+            </div>
+            <div id="team2-p-label" class="p-value-label">Equal weights (p = 0)</div>
+          </div>
+
+          <div>
+            <div class="setting-label">MCDM Method</div>
+            <div class="method-tabs">
+              <button class="method-tab active" data-method="topsis">TOPSIS</button>
+              <button class="method-tab"        data-method="saw">SAW</button>
+              <button class="method-tab"        data-method="mabac">MABAC</button>
+              <button class="method-tab"        data-method="aras">ARAS</button>
+            </div>
+          </div>
+
+          <button id="team2-save-btn" class="btn-save-ranking">Save Ranking</button>
+        </div>
+      </section>
+
+      <!-- Results -->
+      <section class="panel-section">
+        <div class="section-title">Ranked Alternatives</div>
+        <div class="section-body">
+          <div class="filter-row">
+            <input id="team2-filter-selected" class="filter-checkbox"
+                   type="checkbox" data-team="team2">
+            <label for="team2-filter-selected">Show selected alternatives only</label>
+          </div>
+          <table class="results-table">
+            <thead>
+              <tr>
+                <th class="rank-cell">#</th>
+                <th class="id-cell">ID</th>
+                <th class="desc-cell">Description</th>
+                <th class="score-cell">Score</th>
+                <th class="sel-cell" title="Mark as selected">★</th>
+              </tr>
+            </thead>
+            <tbody id="team2-results-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Chart -->
+      <section class="panel-section">
+        <div class="section-title">Score Chart</div>
+        <div class="section-body">
+          <div class="chart-wrap">
+            <canvas id="team2-chart"></canvas>
+          </div>
+        </div>
+      </section>
+
+    </div><!-- /team2-panel -->
+
+  </div><!-- /teams-container -->
+
+  <!-- ── Snapshots bar ──────────────────────────────────────────────────── -->
+  <div class="snapshots-panel">
+    <div class="snapshots-header">
+      <h3>Snapshots</h3>
+      <button id="save-snapshot-btn" class="btn-secondary">Save Snapshot</button>
+    </div>
+    <ul id="snapshots-list"></ul>
+  </div>
+
+  <!-- Shared datalist for p-slider tick marks -->
+  <datalist id="p-datalist">
+    <option value="0">
+    <option value="0.5">
+    <option value="1">
+  </datalist>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

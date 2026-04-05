@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MADM Decision Maker</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body class="landing-body">
+
+  <div class="landing-wrap">
+
+    <!-- Logo -->
+    <div class="landing-logo">
+      <h1>MADM <span>Decision Maker</span></h1>
+      <p>Multi-Criteria Analysis for Group Decision Making</p>
+      <p class="ihe-attribution">IHE Delft — Module 07: Decision Support Systems</p>
+    </div>
+
+    <!-- Alert banner (shown on error redirect) -->
+    <div id="banner" class="banner" hidden></div>
+
+    <!-- Primary card: connect to a sheet -->
+    <div class="landing-card">
+      <div>
+        <h2>Connect to a Google Sheet</h2>
+        <p>Paste the URL from your deployed Google Apps Script to share rankings
+           between teams in real time.</p>
+      </div>
+
+      <div class="url-input-group">
+        <input
+          id="script-url-input"
+          type="url"
+          placeholder="https://script.google.com/macros/s/…"
+          autocomplete="off"
+          spellcheck="false"
+        >
+        <button id="launch-btn" class="btn-primary">Launch</button>
+      </div>
+
+      <div class="landing-divider">or</div>
+
+      <!-- Offline mode: load a local CSV file -->
+      <div class="offline-row">
+        <button id="load-csv-btn" class="btn-secondary">Load CSV file</button>
+        <span>Work offline with a local alternatives file — rankings are saved in the browser.</span>
+      </div>
+      <!-- Hidden file input, triggered by the button above -->
+      <input id="csv-file-input" type="file" accept=".csv,text/csv" hidden>
+
+      <div class="landing-actions">
+        <a href="google-apps-script/Code.gs" download="MADM_Code.txt" class="btn-secondary btn-download">Download Script</a>
+        <a href="https://github.com/DecisionSupportPlayground/decisionsupportplayground.github.io/blob/main/SETUP.md"
+           class="btn-link" target="_blank" rel="noopener">Full Setup Guide ↗</a>
+      </div>
+    </div>
+
+    <!-- Inline setup steps -->
+    <details class="setup-guide">
+      <summary class="setup-guide-toggle">How to set up your Google Sheet ▾</summary>
+      <ol class="setup-steps">
+        <li>
+          <strong>Download the script</strong> — click "Download Script" above.
+          The file is a plain text file; open it in any text editor (Notepad, TextEdit, VS Code).
+        </li>
+        <li>
+          <strong>Create a Google Sheet</strong> — go to
+          <a href="https://sheets.google.com" target="_blank" rel="noopener">sheets.google.com</a>
+          and open a new blank spreadsheet.
+        </li>
+        <li>
+          <strong>Open the Apps Script editor</strong> — in the spreadsheet, click
+          <em>Extensions → Apps Script</em>.
+        </li>
+        <li>
+          <strong>Replace the default code</strong> — select all text in the editor
+          (Ctrl+A / ⌘+A), delete it, then paste the contents of the downloaded script.
+          Save with Ctrl+S / ⌘+S.
+        </li>
+        <li>
+          <strong>Run the setup function</strong> — in the Apps Script editor toolbar,
+          make sure the function selector shows <code>initializeSheets</code>, then click
+          the ▶ Run button. You will be prompted to authorize the script — click through
+          to allow it to access your spreadsheet.
+          <span class="setup-note">This creates the Alternatives, Rankings, and Snapshots
+          tabs and fills in the course example data.</span>
+        </li>
+        <li>
+          <strong>Deploy as a web app</strong> — still in the Apps Script editor, click
+          <em>Deploy → New deployment</em>. Click the gear icon ⚙ next to "Select type"
+          and choose <em>Web app</em>. Set:
+          <ul>
+            <li>Execute as: <strong>Me</strong></li>
+            <li>Who has access: <strong>Anyone</strong></li>
+          </ul>
+          Click <em>Deploy</em>, authorize again if prompted, then copy the
+          <strong>Web app URL</strong>.
+        </li>
+        <li>
+          <strong>Paste the URL above</strong> and click Launch.
+        </li>
+      </ol>
+      <p class="setup-note setup-note-tip">
+        <strong>Tip:</strong> Each group needs their own copy of the sheet and their own
+        deployment URL. Making a copy of the spreadsheet does <em>not</em> copy the
+        deployment — you must re-deploy from each copy.
+      </p>
+    </details>
+
+    <!-- Resume existing connection (shown only when localStorage has a URL) -->
+    <div id="resume-section" class="resume-card" hidden>
+      <h3>Resume previous session</h3>
+      <div id="resume-url-preview" class="resume-url"></div>
+      <div class="resume-buttons">
+        <button id="resume-btn" class="btn-primary">Resume</button>
+        <button id="forget-btn" class="btn-secondary">Disconnect</button>
+      </div>
+    </div>
+
+    <!-- Security notice -->
+    <div class="security-notice">
+      <strong>Public Access Notice:</strong>
+      The Google Sheet connected to this application is deployed as a publicly
+      accessible web service. Any person with the Apps Script URL can read and
+      write data to your spreadsheet. Do not store sensitive, personal,
+      confidential, or proprietary information in the sheet. This tool is intended
+      for collaborative academic exercises only.
+      <br><br>
+      If you share the URL accidentally, re-deploy your Apps Script with a new
+      deployment (the old URL will stop working).
+    </div>
+
+  </div><!-- /landing-wrap -->
+
+  <script type="module" src="js/landing.js"></script>
+</body>
+</html>

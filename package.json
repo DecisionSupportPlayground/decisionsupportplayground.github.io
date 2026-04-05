@@ -1,0 +1,9 @@
+{
+  "name": "madm-decision-maker",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Multi-Criteria Decision Making tool for two-team group decision support",
+  "scripts": {
+    "test": "node --test tests/**/*.test.js"
+  }
+}

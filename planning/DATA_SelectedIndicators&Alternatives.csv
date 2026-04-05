@@ -1,0 +1,73 @@
+,,,,,,,,,,,,,,,,,,,,,,,,mgh,,
+,,,,,,,,,,,,,,,,,,,,,,,,,,
+Proposed Alternative,"ShortDescription
+1b-Newdam Base HP
+1p-Newdam Peak HP
+2  -NewIrrigationFromNewDam
+3  -Extended IrrigationDownstreamfrom existingDams
+4  -Bypass","Bird Habitat Index
+(-)
+(the higher the better)","Overall Energy Generation
+(GWh/year)
+(the higher the better)","Navigability of Big Vessels
+(days/year)
+(the higher the better)","Navigability of Medium Vessels
+(days/year)
+(the higher the better)","Navigability of Small Vessels
+(days/year)
+(the higher the better)","(Catchment) Evaporation Downstream
+(m3)
+(the higher the worst)","(Catchment) Evaporation Upstream
+(m3)
+(the higher the worst)","Wetland Evaporation
+(m3)
+(the higher the worst)","Food Production Downstream
+(tons/year)
+(the higher the better)","Food Production Upstream
+(tons/year)
+(the higher the better)",,,,,,Subgroup 1 (Upstream),Subgroup 2 (Downstream),,,,,,,,
+ID,,I1,I2,I3,I4,I5,I6,I7,I8,I9,I10,,,,,,Manuela,Shada,,,,,,,,
+,,,,,,,,,,,,,,,,,Lucy,Ram,,,,,,,,
+A1,Situation as is,0.6,2394.758,236,316,347,21.193,0,20.61,6400109,0,,,,,,Santiago,Juan,,,,,,,,
+A2,1b,0.6,10739.871,251,318,344,21.19,0.588,20.61,6400109,0,,,,,,,,,,,,,,,
+A3,1p,0.6,10149.887,233,315,344,21.186,0.51,20.61,6400109,0,,,,,,,,,,,,,,,
+A4,1b+2,0.6,10440.646,246,317,344,21.188,0.579,20.61,6400109,1028062,,,,,,,,,,,,,,,
+A5,1p+2,0.6,10053.412,233,315,344,21.186,0.508,20.61,6400109,64833,,,,,,,,,,,,,,,
+A6,3+4 (regular by pass 20%of water diverted),0.39,2394.758,259,328,347,17.671,0,17.213,6907498,0,,,,,,"Bird Habitat Index
+(-)
+(the higher the better)","Overall Energy Generation
+(GWh/year)
+(the higher the better)","Navigability of Big Vessels
+(days/year)
+(the higher the better)","Navigability of Medium Vessels
+(days/year)
+(the higher the better)","Navigability of Small Vessels
+(days/year)
+(the higher the better)","(Catchment) Evaporation Downstream
+(m3)
+(the higher the worst)","(Catchment) Evaporation Upstream
+(m3)
+(the higher the worst)","Wetland Evaporation
+(m3)
+(the higher the worst)","Food Production Downstream
+(tons/year)
+(the higher the better)","Food Production Upstream
+(tons/year)
+(the higher the better)"
+A6.1,3+4 (30% of water diverted),0.312,2394.758,270,335,352,14.14,0,13.77,7252873,0,,,,,Sub 1,4,1,10,9,6,8,3,7,5,2
+A6.2,3+4 (50% of water diverted),0.273,2394.758,285,342,257,12.37,0,12.05,7943622,0,,,,,,,,,,,,,,,
+A6.3,3+4 (70% of water diverted),0.195,2394.758,295,350,365,5.3,0,5.163,8634372,0,,,,,Sub 2,4,10,1,5,6,7,9,2,3,8
+A7,1b+2+4 (regular by pass 20%of water diverted),0.39,10705.428,271,331,347,17.674,0.587,17.674,6400109,507389,,,,,,,,max,,,,,min,,
+A7.1,1b+2+4 (regular by pass 10%of water diverted),0.35,10705.428,270,335,352,21.2,0.587,21.208,6592112,507389,,,,,,,,,,,,,,,
+A7.2,1b+2+4 (regular by pass 25%of water diverted),0.31,10705.428,285,342,257,16.78,0.587,16.79,7040120,507389,,,,,,,,,,,,,,,
+A7.3,1b+2+4 (regular by pass 40%of water diverted),0.27,10705.428,295,350,365,14.14,0.587,14.139,7488127,507389,,,,,,,,,,,,,,,
+A8,1p+2+4,0.39,10053.412,259,328,347,17.67,0.508,17.67,6400109,64833,,,,,,,,,,,,,,,
+A9,1b+2+3+4,0.39,10440.646,267,330,347,17.667,0.579,17.667,6907498,1028062,,,,,,,,,,,,,,,
+A10,1p+2+3+4,0.39,10053.412,258,328,347,17.664,0.508,17.664,6907498,64833,,,,,,,,,,,,,,,
+A11,4 (regular by pass 20%of water diverted),0.39,2394.758,261,328,347,17.677,0,17.677,6400109,0,,,,,,,,,,,,,,,
+A11.1,4 (30% of water diverted),0.312,2394.758,270,335,352,14.141,0,14.141,6720114,0,,,,,,,,,,,,,,,
+A11.2,4 (50% of water diverted),0.27,2394.758,285,342,257,12.374,0,12.374,7360125,0,,,,,,,,,,,,,,,
+A11.3,4 (70% of water diverted),0.21,2394.758,295,350,365,5.3,0,5.3,8000136,0,,,,,,,,,,,,,,,
+A12,1b+2+3,0.6,10440.646,246,316,343,21.183,0.579,21.183,6907498,1028062,,,,,,,,,,,,,,,
+A13,1p+2+3,0.6,10053.412,233,315,343,21.18,0.508,21.18,6907498,64833,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,,,,,,
