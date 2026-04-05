@@ -29,6 +29,8 @@ import {
 // State
 // ─────────────────────────────────────────────────────────────────────────────
 
+const TEAMS = ['team1', 'team2'];
+
 const DEFAULT_TEAM = {
   criteriaOrder: [], // ['I1','I2',...] — index 0 = rank 1 (highest priority)
   selections:    [], // ['A1','A4',...] — selected alternatives
@@ -52,7 +54,6 @@ const state = {
   activeSnapshot:  null,
   lastModified:    null,
   isSyncing:       false,
-  syncError:       null,
   pollTimer:       null
 };
 
@@ -84,7 +85,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const parsed = parseAlternativesCSV(offlineCsv);
       state.criteria     = parsed.criteria;
       state.alternatives = parsed.alternatives;
-      for (const teamId of ['team1', 'team2']) {
+      for (const teamId of TEAMS) {
         if (!state.teams[teamId].criteriaOrder.length) {
           state.teams[teamId].criteriaOrder = state.criteria.map(c => c.id);
         }
@@ -139,7 +140,7 @@ function applySheetData(data) {
         state.method = shared.method;
       }
     }
-    for (const teamId of ['team1', 'team2']) {
+    for (const teamId of TEAMS) {
       const r = rankData[teamId];
       if (!r) continue;
       // Don't overwrite a team that has unsaved local edits
@@ -164,7 +165,7 @@ function applySheetData(data) {
   }
 
   // Seed criteria order if blank (first load)
-  for (const teamId of ['team1', 'team2']) {
+  for (const teamId of TEAMS) {
     if (!state.teams[teamId].criteriaOrder.length && state.criteria.length) {
       state.teams[teamId].criteriaOrder = state.criteria.map(c => c.id);
     }
@@ -238,8 +239,7 @@ function recompute(teamId) {
 
 function renderAllPanels() {
   renderSharedSettings();
-  renderPanel('team1');
-  renderPanel('team2');
+  for (const teamId of TEAMS) renderPanel(teamId);
   renderCombinedChart();
   renderSnapshotsList();
 }
@@ -316,7 +316,7 @@ function renderSharedSettings() {
   document.querySelectorAll('#shared-method-tabs .method-tab').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.method === state.method);
   });
-  for (const teamId of ['team1', 'team2']) updateDirtyIndicator(teamId);
+  for (const teamId of TEAMS) updateDirtyIndicator(teamId);
 }
 
 function updateDirtyIndicator(teamId) {
@@ -359,15 +359,14 @@ function renderChart(teamId) {
 
   const results = state.results[teamId] ?? [];
   if (!results.length) {
-    if (canvas._chart) { canvas._chart.destroy(); canvas._chart = null; }
+    _destroyChart(canvas);
     return;
   }
 
   // Read colors from CSS variables so they always match the current palette
-  const style     = getComputedStyle(document.documentElement);
-  const teamColor = style.getPropertyValue(teamId === 'team1' ? '--team1' : '--team2').trim();
-  const gridColor = style.getPropertyValue('--border').trim();
-  const tickColor = style.getPropertyValue('--text-muted').trim();
+  const teamColor = _cssVar(teamId === 'team1' ? '--team1' : '--team2');
+  const gridColor = _cssVar('--border');
+  const tickColor = _cssVar('--text-muted');
 
   const labels  = results.map(r => r.id);
   const scores  = results.map(r => r.score);
@@ -420,18 +419,7 @@ function renderChart(teamId) {
           }
         }
       },
-      scales: {
-        x: {
-          min: 0,
-          title: { display: true, text: 'Score', color: tickColor },
-          ticks: { color: tickColor },
-          grid:  { color: gridColor }
-        },
-        y: {
-          ticks: { color: tickColor, font: { size: 11 } },
-          grid:  { color: gridColor }
-        }
-      }
+      scales: _baseChartScales(tickColor, gridColor)
     }
   });
 }
@@ -463,16 +451,15 @@ function renderCombinedChart() {
   const r2 = state.results.team2 ?? [];
 
   if (!r1.length && !r2.length) {
-    if (canvas._chart) { canvas._chart.destroy(); canvas._chart = null; }
+    _destroyChart(canvas);
     return;
   }
 
-  const style         = getComputedStyle(document.documentElement);
-  const combinedColor = style.getPropertyValue('--combined').trim();
-  const team1Color    = style.getPropertyValue('--team1').trim();
-  const team2Color    = style.getPropertyValue('--team2').trim();
-  const gridColor     = style.getPropertyValue('--border').trim();
-  const tickColor     = style.getPropertyValue('--text-muted').trim();
+  const combinedColor = _cssVar('--combined');
+  const team1Color    = _cssVar('--team1');
+  const team2Color    = _cssVar('--team2');
+  const gridColor     = _cssVar('--border');
+  const tickColor     = _cssVar('--text-muted');
 
   const hasT1   = r1.length > 0;
   const hasT2   = r2.length > 0;
@@ -562,18 +549,7 @@ function renderCombinedChart() {
           }
         }
       },
-      scales: {
-        x: {
-          min: 0,
-          title: { display: true, text: 'Score', color: tickColor },
-          ticks: { color: tickColor },
-          grid:  { color: gridColor }
-        },
-        y: {
-          ticks: { color: tickColor, font: { size: 11 } },
-          grid:  { color: gridColor }
-        }
-      }
+      scales: _baseChartScales(tickColor, gridColor)
     }
   });
 }
@@ -609,15 +585,7 @@ function wireGlobalButtons() {
   sharedSlider?.addEventListener('input', () => {
     state.p = parseFloat(sharedSlider.value);
     updatePLabel(state.p);
-    for (const teamId of ['team1', 'team2']) {
-      state.teams[teamId].isDirty = true;
-      recompute(teamId);
-      renderCriteriaList(teamId);
-      renderResults(teamId);
-      renderChart(teamId);
-      updateDirtyIndicator(teamId);
-    }
-    renderCombinedChart();
+    _onSharedSettingChanged();
   });
 
   // Shared method tabs — affects both teams
@@ -627,14 +595,7 @@ function wireGlobalButtons() {
       document.querySelectorAll('#shared-method-tabs .method-tab').forEach(b =>
         b.classList.toggle('active', b === btn)
       );
-      for (const teamId of ['team1', 'team2']) {
-        state.teams[teamId].isDirty = true;
-        recompute(teamId);
-        renderResults(teamId);
-        renderChart(teamId);
-        updateDirtyIndicator(teamId);
-      }
-      renderCombinedChart();
+      _onSharedSettingChanged();
     });
   });
 
@@ -806,7 +767,7 @@ function _restoreState(saved) {
   if (state.p      === 0       && legacyP      !== undefined) state.p      = legacyP;
   if (state.method === 'topsis' && legacyMethod !== undefined) state.method = legacyMethod;
 
-  for (const teamId of ['team1', 'team2']) {
+  for (const teamId of TEAMS) {
     if (saved.teams?.[teamId]) {
       Object.assign(state.teams[teamId], {
         criteriaOrder: saved.teams[teamId].criteriaOrder ?? [],
@@ -838,6 +799,49 @@ function showToast(message, type = 'success') {
     toast.classList.remove('visible');
     setTimeout(() => toast.remove(), 300);
   }, 3000);
+}
+
+/** Read a CSS custom property value from :root. */
+function _cssVar(name) {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+
+/**
+ * Shared Chart.js scale config for all score bar charts.
+ * Both team charts and the combined chart use the same axis structure.
+ */
+function _baseChartScales(tickColor, gridColor) {
+  return {
+    x: {
+      min: 0,
+      title: { display: true, text: 'Score', color: tickColor },
+      ticks: { color: tickColor },
+      grid:  { color: gridColor }
+    },
+    y: {
+      ticks: { color: tickColor, font: { size: 11 } },
+      grid:  { color: gridColor }
+    }
+  };
+}
+
+/** Destroy the Chart.js instance on a canvas element if one exists. */
+function _destroyChart(canvas) {
+  if (canvas._chart) { canvas._chart.destroy(); canvas._chart = null; }
+}
+
+/**
+ * Recompute and re-render both teams after a shared setting (p or method) changes.
+ * Marks both teams dirty, recomputes scores, and refreshes all dependent views.
+ */
+function _onSharedSettingChanged() {
+  for (const teamId of TEAMS) {
+    state.teams[teamId].isDirty = true;
+    recompute(teamId);
+    renderPanel(teamId);
+    updateDirtyIndicator(teamId);
+  }
+  renderCombinedChart();
 }
 
 /** Convert a CSS hex color (#rrggbb) to rgba(r,g,b,alpha) for canvas compatibility. */

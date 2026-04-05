@@ -53,7 +53,6 @@
   --info:        #2ea0ed;   /* --color--blue-600 */
 
   /* Fonts — IHE Delft typefaces */
-  --font-title:  'Poppins', 'Poppins-fallback', system-ui, sans-serif;
   --font-body:   'PT Serif', 'PT Serif-fallback', Georgia, serif;
   --font-ui:     'Poppins', 'Poppins-fallback', system-ui, sans-serif;
 
@@ -581,12 +580,6 @@ ul { list-style: none; }
 /* ──────────────────────────────────────────────────────────────────────────
    Settings (p-slider, method tabs)
    ────────────────────────────────────────────────────────────────────────── */
-.settings-grid {
-  display: flex;
-  flex-direction: column;
-  gap: .9rem;
-}
-
 .setting-label {
   font-size: .75rem;
   font-weight: 700;
@@ -596,7 +589,7 @@ ul { list-style: none; }
   letter-spacing: .06em;
 }
 
-/* p-slider */
+/* p-slider — used only in shared settings; thumb styled via .shared-slider override below */
 .p-slider {
   width: 100%;
   -webkit-appearance: none;
@@ -611,15 +604,11 @@ ul { list-style: none; }
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  background: var(--team1);
+  background: var(--ihe-blue);
   border: 2px solid var(--bg);
-  box-shadow: 0 0 0 2px var(--team1);
+  box-shadow: 0 0 0 2px var(--ihe-blue);
   cursor: grab;
   transition: transform var(--transition);
-}
-.team2 .p-slider::-webkit-slider-thumb {
-  background: var(--team2);
-  box-shadow: 0 0 0 2px var(--team2);
 }
 .p-slider:active::-webkit-slider-thumb { cursor: grabbing; transform: scale(1.15); }
 
@@ -661,8 +650,7 @@ ul { list-style: none; }
   text-align: center;
 }
 .method-tab:hover { color: var(--text); }
-.team1 .method-tab.active { background: var(--team1); color: #fff; }
-.team2 .method-tab.active { background: var(--team2); color: #fff; }
+.method-tab.active { background: var(--ihe-blue); color: #fff; }
 
 /* Save ranking button */
 .btn-save-ranking {

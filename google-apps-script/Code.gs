@@ -34,6 +34,10 @@ var TAB_RANKINGS     = 'Rankings';
 var TAB_SNAPSHOTS    = 'Snapshots';
 var TAB_META         = '_meta';
 
+// ─── Rankings tab column layout ──────────────────────────────────────────────
+// Shared by _saveRankings (read/write) and initializeSheets (write).
+var RANKINGS_HEADER = ['team', 'teamName', 'criterionId', 'rank', 'p', 'method', 'selections', 'lastUpdated'];
+
 // ─────────────────────────────────────────────────────────────────────────────
 // HTTP entry points
 // ─────────────────────────────────────────────────────────────────────────────
@@ -123,8 +127,7 @@ function doPost(e) {
  */
 function _saveRankings(team, rankings) {
   var sheet = _getOrCreateSheet(TAB_RANKINGS);
-  var HEADER = ['team', 'teamName', 'criterionId', 'rank', 'p', 'method', 'selections', 'lastUpdated'];
-  var COLS   = HEADER.length;
+  var COLS  = RANKINGS_HEADER.length;
 
   var criteriaOrder = rankings.criteriaOrder || [];
   var timestamp     = new Date().toISOString();
@@ -161,7 +164,7 @@ function _saveRankings(team, rankings) {
   }
 
   // Rebuild: header + other team's rows + new team rows — write in one batch
-  var allRows = [HEADER].concat(otherRows).concat(newTeamRows);
+  var allRows = [RANKINGS_HEADER].concat(otherRows).concat(newTeamRows);
   sheet.clearContents();
   sheet.getRange(1, 1, allRows.length, COLS).setValues(allRows);
 
@@ -319,20 +322,19 @@ function initializeSheets() {
     // Default state from DATA_Ranking.csv — one row per criterion per team.
     // Use a single setValues() batch (not appendRow loops) to avoid the
     // 30-second Apps Script execution limit timing out after only one team's rows.
-    var RANK_HEADER     = ['team', 'teamName', 'criterionId', 'rank', 'p', 'method', 'selections', 'lastUpdated'];
     var team1Criteria   = ['I4','I1','I7','I9','I6','I5','I8','I10','I3','I2'];
     var team2Criteria   = ['I2','I3','I8','I10','I4','I5','I6','I9','I7','I1'];
     var team1Selections = JSON.stringify(['A1','A4','A5','A7.3','A9','A12']);
     var team2Selections = JSON.stringify(['A4','A6.2','A7','A7.1','A9','A11.2']);
     var now             = new Date().toISOString();
-    var rankRows = [RANK_HEADER];
+    var rankRows = [RANKINGS_HEADER];
     for (var ri = 0; ri < team1Criteria.length; ri++) {
       rankRows.push(['team1', 'Upper Basin',  team1Criteria[ri], ri + 1, 0, 'topsis', team1Selections, now]);
     }
     for (var ri = 0; ri < team2Criteria.length; ri++) {
       rankRows.push(['team2', 'Lower Basin', team2Criteria[ri], ri + 1, 0, 'topsis', team2Selections, now]);
     }
-    rankSheet.getRange(1, 1, rankRows.length, RANK_HEADER.length).setValues(rankRows);
+    rankSheet.getRange(1, 1, rankRows.length, RANKINGS_HEADER.length).setValues(rankRows);
   }
 
   // ── Snapshots tab ────────────────────────────────────────────────────────
