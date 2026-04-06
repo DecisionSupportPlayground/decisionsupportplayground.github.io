@@ -357,71 +357,32 @@ function renderChart(teamId) {
   const canvas = document.getElementById(`${teamId}-chart`);
   if (!canvas || typeof Chart === 'undefined') return;
 
-  const results = state.results[teamId] ?? [];
-  if (!results.length) {
-    _destroyChart(canvas);
-    return;
-  }
+  const otherId     = teamId === 'team1' ? 'team2' : 'team1';
+  const ownSels     = new Set(state.teams[teamId].selections);
+  const otherSels   = new Set(state.teams[otherId].selections);
+  const allSels     = new Set([...ownSels, ...otherSels]);
+  const filterEl    = document.getElementById(`${teamId}-filter-selected`);
+  const selectedOnly = filterEl?.checked ?? false;
+  // When filtering: show the union of both teams' selections
+  const combinedFilterEl = document.getElementById('combined-filter-selected');
+  const anyFilter   = selectedOnly || (combinedFilterEl?.checked ?? false);
 
-  // Read colors from CSS variables so they always match the current palette
-  const teamColor = _cssVar(teamId === 'team1' ? '--team1' : '--team2');
-  const gridColor = _cssVar('--border');
-  const tickColor = _cssVar('--text-muted');
+  let results = state.results[teamId] ?? [];
+  if (!results.length) { _destroyChart(canvas); return; }
 
-  const labels  = results.map(r => r.id);
-  const scores  = results.map(r => r.score);
-  // Colorblind-safe: selected = solid team color, unselected = very transparent.
-  // Uses rgba() so canvas receives an unambiguous color regardless of browser quirks.
-  const solid = teamColor;
-  const faint = _hexToRgba(teamColor, 0.40);
-  const faintBorder = _hexToRgba(teamColor, 0.65);
-  const colors  = results.map(r => r.isSelected ? solid : faint);
-  const borders = results.map(r => r.isSelected ? solid : faintBorder);
+  // When filter is active, show union; each result gets selection grade:
+  //   'own'   = this team selected it  → full opacity
+  //   'other' = only other team        → faded (shows shared context)
+  //   'none'  = neither               → hidden (filtered out)
+  if (anyFilter) results = results.filter(r => allSels.has(r.id));
+  const graded = results.map(r => ({
+    ...r,
+    isOwn:   ownSels.has(r.id),
+    isOther: !ownSels.has(r.id) && otherSels.has(r.id)
+  }));
 
-  const chartData = {
-    labels,
-    datasets: [{
-      label: 'Score',
-      data: scores,
-      backgroundColor: colors,
-      borderColor: borders,
-      borderWidth: 1
-    }]
-  };
-
-  if (canvas._chart) {
-    // Keep results reference fresh for tooltip lookups
-    canvas._results = results;
-    canvas._chart.data = chartData;
-    canvas._chart.update('none');
-    return;
-  }
-
-  canvas._results = results;
-  canvas._chart = new Chart(canvas, {
-    type: 'bar',
-    data: chartData,
-    options: {
-      indexAxis: 'y',
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          callbacks: {
-            // Show full description on hover
-            title: ctx => {
-              const id = ctx[0]?.label;
-              const r = canvas._results?.find(x => x.id === id);
-              return r ? `${r.id}: ${r.description}` : (id || '');
-            },
-            label: ctx => ` Score: ${ctx.parsed.x.toFixed(3)}`
-          }
-        }
-      },
-      scales: _baseChartScales(tickColor, gridColor)
-    }
-  });
+  const color = _cssVar(teamId === 'team1' ? '--team1' : '--team2');
+  _renderBarChart(canvas, graded, color);
 }
 
 function renderSnapshotsList() {
@@ -449,90 +410,128 @@ function renderCombinedChart() {
 
   const r1 = state.results.team1 ?? [];
   const r2 = state.results.team2 ?? [];
-
-  if (!r1.length && !r2.length) {
-    _destroyChart(canvas);
-    return;
-  }
-
-  const combinedColor = _cssVar('--combined');
-  const team1Color    = _cssVar('--team1');
-  const team2Color    = _cssVar('--team2');
-  const gridColor     = _cssVar('--border');
-  const tickColor     = _cssVar('--text-muted');
+  if (!r1.length && !r2.length) { _destroyChart(canvas); return; }
 
   const hasT1   = r1.length > 0;
   const hasT2   = r2.length > 0;
   const divisor = (hasT1 ? 1 : 0) + (hasT2 ? 1 : 0);
-  const team1Name = state.teams.team1.name || 'Upper Basin';
-  const team2Name = state.teams.team2.name || 'Lower Basin';
 
-  // Union of all alternative IDs
-  const allIds = [...new Set([...r1.map(r => r.id), ...r2.map(r => r.id)])];
-
-  // Build description map and per-team score lookups
+  const allIds  = [...new Set([...r1.map(r => r.id), ...r2.map(r => r.id)])];
   const descMap = {};
   for (const r of [...r1, ...r2]) descMap[r.id] = r.description;
 
-  // Optionally filter to alternatives selected by at least one team
-  const filterEl = document.getElementById('combined-filter-selected');
-  const selectedOnly = filterEl?.checked ?? false;
   const allSelections = new Set([
     ...state.teams.team1.selections,
     ...state.teams.team2.selections
   ]);
+  const filterEl     = document.getElementById('combined-filter-selected');
+  const selectedOnly = filterEl?.checked ?? false;
 
-  // Sort by combined average score descending
+  // Each entry carries per-team scores so we can build marker datasets below
   let sorted = allIds
     .map(id => {
-      const s1 = hasT1 ? (r1.find(r => r.id === id)?.score ?? null) : null;
-      const s2 = hasT2 ? (r2.find(r => r.id === id)?.score ?? null) : null;
+      const s1  = hasT1 ? (r1.find(r => r.id === id)?.score ?? null) : null;
+      const s2  = hasT2 ? (r2.find(r => r.id === id)?.score ?? null) : null;
       const avg = divisor > 0 ? ((s1 ?? 0) + (s2 ?? 0)) / divisor : 0;
-      return { id, description: descMap[id] || id, score: avg, score1: s1, score2: s2 };
+      return { id, description: descMap[id] || id, score: avg, score1: s1, score2: s2,
+               isSelected: allSelections.has(id) };
     })
     .sort((a, b) => b.score - a.score);
 
-  if (selectedOnly) sorted = sorted.filter(d => allSelections.has(d.id));
+  if (selectedOnly) sorted = sorted.filter(r => r.isSelected);
 
-  const labels = sorted.map(d => `${d.id}: ${d.description}`);
-
-  // Combined average bar (drawn first = at back)
-  const datasets = [{
-    type: 'bar',
-    label: 'Combined Average',
-    data: sorted.map(d => d.score),
-    backgroundColor: _hexToRgba(combinedColor, 0.80),
-    borderColor: combinedColor,
-    borderWidth: 1
-  }];
-
-  // Team score markers: line datasets with points only — no connecting line.
-  // pointStyle:'line' + pointRotation:90 draws a short vertical tick at each score.
-  const markerCfg = (color, name, scores) => ({
+  // Team score markers: a line dataset per team, points only (no connecting line).
+  // pointStyle:'line' + rotation:90 renders a short vertical tick at each score.
+  const _marker = (color, name, scores) => ({
     type: 'line',
     label: name,
     data: scores,
     showLine: false,
     pointStyle: 'line',
-    pointRadius: 10,
+    pointRadius: 6,
     pointRotation: 90,
     pointBorderColor: color,
-    pointBorderWidth: 3,
+    pointBorderWidth: 2,
     borderColor: color,
-    backgroundColor: color
+    backgroundColor: color,
+    order: 1
   });
 
-  if (hasT1) datasets.push(markerCfg(team1Color, team1Name, sorted.map(d => d.score1)));
-  if (hasT2) datasets.push(markerCfg(team2Color, team2Name, sorted.map(d => d.score2)));
+  const extraDatasets = [];
+  if (hasT1) extraDatasets.push(_marker(_cssVar('--team1'), state.teams.team1.name || 'Upper Basin', sorted.map(r => r.score1)));
+  if (hasT2) extraDatasets.push(_marker(_cssVar('--team2'), state.teams.team2.name || 'Lower Basin', sorted.map(r => r.score2)));
 
-  const chartData = { labels, datasets };
+  _renderBarChart(canvas, sorted, _cssVar('--combined'), { extraDatasets, showLegend: extraDatasets.length > 0 });
+}
+
+/**
+ * Shared horizontal bar chart renderer used by all three score charts.
+ *
+ * Every bar is a fixed pixel height (BAR_PX) so bar thickness looks identical
+ * across all charts regardless of how many alternatives each shows.
+ * The container height is set in JS to n_bars × BAR_PX + axis overhead.
+ *
+ * @param {HTMLCanvasElement} canvas
+ * @param {Array<{id, description, score, isSelected}>} results  sorted descending
+ * @param {string} color  CSS hex color for this chart's accent
+ * @param {{ extraDatasets?: object[], showLegend?: boolean }} [opts]
+ */
+function _renderBarChart(canvas, results, color, opts = {}) {
+  const { extraDatasets = [], showLegend = false } = opts;
+
+  const gridColor   = _cssVar('--border');
+  const tickColor   = _cssVar('--text-muted');
+  // Opacity levels:
+  //   own selection (or combined selected) → full solid
+  //   other team's selection only          → mid opacity (visible but clearly secondary)
+  //   not selected                         → low opacity
+  const solid        = color;
+  const otherOpacity = _hexToRgba(color, 0.55);
+  const faint        = _hexToRgba(color, 0.30);
+  const faintBorder  = _hexToRgba(color, 0.55);
+
+  const _bg  = r => r.isOwn !== undefined
+    ? (r.isOwn ? solid : otherOpacity)
+    : (r.isSelected ? solid : faint);
+  const _bdr = r => r.isOwn !== undefined
+    ? (r.isOwn ? solid : otherOpacity)
+    : (r.isSelected ? solid : faintBorder);
+
+  // Fixed px per bar — same value for all charts so bars are always identical size
+  const BAR_PX    = 13;
+  const AXIS_PX   = 36;
+  const LEGEND_PX = showLegend ? 24 : 0;
+  const targetH   = Math.max(60, results.length * BAR_PX + AXIS_PX + LEGEND_PX);
+  const wrap      = canvas.parentElement;
+  if (wrap) wrap.style.height = targetH + 'px';
+
+  const chartData = {
+    labels: results.map(r => r.id),
+    datasets: [
+      {
+        label: 'Score',
+        data:            results.map(r => r.score),
+        backgroundColor: results.map(r => _bg(r)),
+        borderColor:     results.map(r => _bdr(r)),
+        borderWidth: 1,
+        barThickness: 8,
+        categoryPercentage: 0.6,
+        barPercentage: 0.9,
+        order: 2
+      },
+      ...extraDatasets
+    ]
+  };
 
   if (canvas._chart) {
+    canvas._results = results;
     canvas._chart.data = chartData;
+    canvas._chart.resize();
     canvas._chart.update('none');
     return;
   }
 
+  canvas._results = results;
   canvas._chart = new Chart(canvas, {
     type: 'bar',
     data: chartData,
@@ -542,19 +541,21 @@ function renderCombinedChart() {
       maintainAspectRatio: false,
       plugins: {
         legend: {
-          display: true,
-          position: 'bottom',
-          labels: {
-            color: tickColor, boxWidth: 14, padding: 16,
-            usePointStyle: true
-          }
+          display: showLegend,
+          position: 'top',
+          labels: { color: tickColor, boxWidth: 10, padding: 10, usePointStyle: true }
         },
         tooltip: {
           callbacks: {
-            title: ctx => ctx[0]?.label ?? '',
+            title: ctx => {
+              const r = (canvas._results ?? [])[ctx[0]?.dataIndex];
+              if (r) return r.description ? `${r.id}: ${r.description}` : r.id;
+              return ctx[0]?.label || '';
+            },
             label: ctx => {
               const v = ctx.parsed.x;
-              return ` ${ctx.dataset.label}: ${v != null ? v.toFixed(3) : 'N/A'}`;
+              const name = ctx.dataset.label || 'Score';
+              return ` ${name}: ${v != null ? v.toFixed(3) : 'N/A'}`;
             }
           }
         }
@@ -612,9 +613,9 @@ function wireGlobalButtons() {
   // Filter-selected checkboxes (event delegation)
   document.addEventListener('change', e => {
     if (e.target.classList.contains('filter-checkbox')) {
-      const teamId = e.target.dataset.team;
-      if (teamId) renderResults(teamId);
-      else renderCombinedChart(); // combined filter has no data-team
+      // Any filter change affects all three charts (union of both selections)
+      for (const teamId of TEAMS) { renderResults(teamId); renderChart(teamId); }
+      renderCombinedChart();
     }
 
     // Alternative selection checkboxes
@@ -630,7 +631,8 @@ function wireGlobalButtons() {
       state.teams[teamId].isDirty = true;
       recompute(teamId);   // isSelected flag changes
       renderResults(teamId);
-      renderChart(teamId);
+      for (const id of TEAMS) renderChart(id); // both charts reflect updated selections
+      renderCombinedChart();
       updateDirtyIndicator(teamId);
     }
   });
