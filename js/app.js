@@ -474,8 +474,16 @@ function renderCombinedChart() {
   const descMap = {};
   for (const r of [...r1, ...r2]) descMap[r.id] = r.description;
 
+  // Optionally filter to alternatives selected by at least one team
+  const filterEl = document.getElementById('combined-filter-selected');
+  const selectedOnly = filterEl?.checked ?? false;
+  const allSelections = new Set([
+    ...state.teams.team1.selections,
+    ...state.teams.team2.selections
+  ]);
+
   // Sort by combined average score descending
-  const sorted = allIds
+  let sorted = allIds
     .map(id => {
       const s1 = hasT1 ? (r1.find(r => r.id === id)?.score ?? null) : null;
       const s2 = hasT2 ? (r2.find(r => r.id === id)?.score ?? null) : null;
@@ -483,6 +491,8 @@ function renderCombinedChart() {
       return { id, description: descMap[id] || id, score: avg, score1: s1, score2: s2 };
     })
     .sort((a, b) => b.score - a.score);
+
+  if (selectedOnly) sorted = sorted.filter(d => allSelections.has(d.id));
 
   const labels = sorted.map(d => `${d.id}: ${d.description}`);
 
@@ -604,6 +614,7 @@ function wireGlobalButtons() {
     if (e.target.classList.contains('filter-checkbox')) {
       const teamId = e.target.dataset.team;
       if (teamId) renderResults(teamId);
+      else renderCombinedChart(); // combined filter has no data-team
     }
 
     // Alternative selection checkboxes

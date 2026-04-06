@@ -751,6 +751,12 @@ ul { list-style: none; }
 .combined-subtitle {
   font-size: .78rem;
   color: var(--text-dim);
+  flex: 1;
+}
+
+.combined-filter {
+  margin-bottom: 0;
+  accent-color: var(--combined);
 }
 
 .chart-wrap-combined {
