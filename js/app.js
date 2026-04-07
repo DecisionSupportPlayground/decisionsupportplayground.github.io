@@ -356,6 +356,7 @@ function renderCriteriaList(teamId) {
       renderCriteriaList(teamId);
       renderResults(teamId);
       renderChart(teamId);
+      renderCriteriaTable(teamId);
       renderSpiderChart(teamId);
       renderCombinedChart();
       renderCombinedSpiderChart();
@@ -661,15 +662,15 @@ function renderCombinedTable() {
   const allSels = new Set([...state.teams.team1.selections, ...state.teams.team2.selections]);
   const divisor = (r1.length ? 1 : 0) + (r2.length ? 1 : 0);
   const allIds  = [...new Set([...r1.map(r => r.id), ...r2.map(r => r.id)])];
-  const rows = allIds
-    .map(id => {
-      const s1  = r1.find(r => r.id === id)?.score ?? 0;
-      const s2  = r2.find(r => r.id === id)?.score ?? 0;
-      const alt = state.alternatives.find(a => a.id === id);
-      return { id, score: (s1 + s2) / divisor, isSelected: allSels.has(id),
-               description: alt?.description ?? '' };
-    })
-    .sort((a, b) => b.score - a.score);
+  const unsorted = allIds.map(id => {
+    const s1  = r1.find(r => r.id === id)?.score ?? 0;
+    const s2  = r2.find(r => r.id === id)?.score ?? 0;
+    const alt = state.alternatives.find(a => a.id === id);
+    return { id, score: (s1 + s2) / divisor, isSelected: allSels.has(id),
+             description: alt?.description ?? '' };
+  });
+  const combinedRanks = scoreToRank(unsorted.map(r => r.score));
+  const rows = _sortById(unsorted.map((r, i) => ({ ...r, rank: combinedRanks[i] })));
 
   if (!rows.length) {
     wrap.innerHTML = '<p class="empty-msg" style="padding:.75rem 1rem">No data</p>';
@@ -685,8 +686,12 @@ function renderCombinedTable() {
     return { min: Math.min(...vals), max: Math.max(...vals) };
   });
 
+  const method = state.method.toUpperCase();
+
   const thead = `<thead><tr>
+    <th class="cvt-rank">#</th>
     <th class="cvt-id"></th>
+    <th class="cvt-score">${escHtml(method)} avg</th>
     ${orderedCriteria.map(c => { const ci = _criterionIcon(c); return `<th title="${ci ? ci + ' ' : ''}${escHtml(c.name)} (${c.type === 1 ? '↑ benefit' : '↓ cost'})">${ci ? ci + ' ' : ''}${escHtml(c.id)}</th>`; }).join('')}
   </tr></thead>`;
 
@@ -699,7 +704,7 @@ function renderCombinedTable() {
       return `<td class="cvt-cell" style="background:${bg}" title="${escHtml(crit.id)}: ${v != null ? v : '—'}">${v != null ? v : '—'}</td>`;
     }).join('');
     const rowTitle = ` title="${escHtml(r.id)}: ${escHtml(r.description)}"`;
-    return `<tr class="${r.isSelected ? 'selected-alt' : ''}"${rowTitle}><td class="cvt-id">${escHtml(r.id)}</td>${cells}</tr>`;
+    return `<tr class="${r.isSelected ? 'selected-alt' : ''}"${rowTitle}><td class="cvt-rank">${r.rank}</td><td class="cvt-id">${escHtml(r.id)}</td><td class="cvt-score">${r.score.toFixed(3)}</td>${cells}</tr>`;
   }).join('')}</tbody>`;
 
   wrap.innerHTML = `<div class="cvt-scroll"><table class="criteria-values-table">${thead}${tbody}</table></div>`;
@@ -838,7 +843,7 @@ function renderCriteriaTable(teamId) {
   const wrap = document.getElementById(`${teamId}-criteria-table-wrap`);
   if (!wrap || wrap.hidden) return;
 
-  const rows = _activeResults(teamId);
+  const rows = _sortById(_activeResults(teamId));
 
   if (!rows.length) {
     wrap.innerHTML = '<p class="empty-msg" style="padding:.75rem 1rem">No data</p>';
@@ -859,8 +864,12 @@ function renderCriteriaTable(teamId) {
     return { min: Math.min(...vals), max: Math.max(...vals) };
   });
 
+  const method = state.method.toUpperCase();
+
   const thead = `<thead><tr>
+    <th class="cvt-rank">#</th>
     <th class="cvt-id"></th>
+    <th class="cvt-score">${escHtml(method)}</th>
     ${orderedCriteria.map(c => { const ci = _criterionIcon(c); return `<th title="${ci ? ci + ' ' : ''}${escHtml(c.name)} (${c.type === 1 ? '↑ benefit' : '↓ cost'})">${ci ? ci + ' ' : ''}${escHtml(c.id)}</th>`; }).join('')}
   </tr></thead>`;
 
@@ -873,7 +882,7 @@ function renderCriteriaTable(teamId) {
       return `<td class="cvt-cell" style="background:${bg}" title="${escHtml(crit.id)}: ${v != null ? v : '—'}">${v != null ? v : '—'}</td>`;
     }).join('');
     const rowTitle = ` title="${escHtml(r.id)}: ${escHtml(r.description)}"`;
-    return `<tr class="${r.isSelected ? 'selected-alt' : ''}"${rowTitle}><td class="cvt-id">${escHtml(r.id)}</td>${cells}</tr>`;
+    return `<tr class="${r.isSelected ? 'selected-alt' : ''}"${rowTitle}><td class="cvt-rank">${r.rank}</td><td class="cvt-id">${escHtml(r.id)}</td><td class="cvt-score">${r.score.toFixed(3)}</td>${cells}</tr>`;
   }).join('')}</tbody>`;
 
   wrap.innerHTML = `<div class="cvt-scroll"><table class="criteria-values-table">${thead}${tbody}</table></div>`;
@@ -1412,6 +1421,13 @@ function _criterionIcon(criterion) {
     if (rx.test(text)) return icon;
   }
   return '';
+}
+
+/** Sort an array of objects with an `id` field alphabetically/numerically (A1 < A2 < A11). */
+function _sortById(arr) {
+  return [...arr].sort((a, b) =>
+    a.id.localeCompare(b.id, undefined, { numeric: true, sensitivity: 'base' })
+  );
 }
 
 function escHtml(str) {

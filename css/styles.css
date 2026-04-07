@@ -655,6 +655,26 @@ ul { list-style: none; }
 }
 
 /* ID column — all rows */
+.criteria-values-table .cvt-rank {
+  color: var(--text-muted);
+  font-size: .62rem;
+  font-weight: 700;
+  text-align: center;
+  padding: 0 .3rem;
+  vertical-align: middle;
+  cursor: default;
+  white-space: nowrap;
+}
+.criteria-values-table .cvt-score {
+  color: var(--text-muted);
+  font-size: .62rem;
+  font-family: var(--font-ui);
+  text-align: right;
+  padding: 0 .35rem;
+  vertical-align: middle;
+  cursor: default;
+  white-space: nowrap;
+}
 .criteria-values-table .cvt-id {
   color: var(--text-muted);
   font-size: .62rem;
@@ -728,11 +748,13 @@ ul { list-style: none; }
 
 .drag-handle {
   color: var(--text-dim);
+  opacity: 0.4;
   cursor: grab;
   font-size: 1rem;
   flex-shrink: 0;
   line-height: 1;
 }
+.criterion-item:hover .drag-handle { opacity: 0.7; }
 .drag-handle:active { cursor: grabbing; }
 
 .criterion-rank {
