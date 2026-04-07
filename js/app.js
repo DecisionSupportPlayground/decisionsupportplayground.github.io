@@ -9,7 +9,9 @@
  *   - Delegates rendering to renderPanel() and renderChart()
  */
 
-import { rankOrderWeights, runMethod, scoreToRank } from './mcdm.js';
+import { initMCDM, rankOrderWeights, runMethod, scoreToRank } from './mcdm.js';
+
+let _pyodideReady = false;
 import {
   parseAlternativesCSV,
   parseRankingsData,
@@ -77,6 +79,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
   wireGlobalButtons();
   renderAllPanels();
+
+  // Start Pyodide + pymcdm loading in parallel with the sheet data fetch.
+  // Both take ~5-10 s; the user waits for whichever finishes last, not both.
+  setStatus('loading', 'Loading MCDM engine…');
+  initMCDM()
+    .then(() => {
+      _pyodideReady = true;
+      if (state.alternatives.length) { recomputeAll(); renderAllPanels(); }
+    })
+    .catch(err => setStatus('error', `MCDM engine failed: ${err.message}`));
 
   if (isOffline && offlineCsv) {
     // Offline mode: parse the locally loaded CSV directly
@@ -226,6 +238,7 @@ function recompute(teamId) {
     })
   );
 
+  if (!_pyodideReady) { state.results[teamId] = []; return; }
   let scores;
   try {
     scores = runMethod(state.method, matrix, weights, types); // shared method

@@ -33,10 +33,16 @@
  *   I10 Food Production Upstream    benefit   joint rank 4
  */
 
-import { strict as assert } from 'node:assert';
-import { describe, it }     from 'node:test';
+// Prerequisites:
+//   npm install pyodide          (Node.js Pyodide runtime)
+//   network access to PyPI       (micropip installs pymcdm on first run)
 
-import { topsis, saw, rankOrderWeights, scoreToRank } from '../js/mcdm.js';
+import { strict as assert } from 'node:assert';
+import { describe, it, before } from 'node:test';
+
+import { initMCDM, topsis, saw, rankOrderWeights, scoreToRank } from '../js/mcdm.js';
+
+before(async () => { await initMCDM(); });
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Input data — sourced from DATA_SelectedIndicators&Alternatives.csv

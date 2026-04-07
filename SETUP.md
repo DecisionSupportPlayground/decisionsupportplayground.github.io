@@ -113,15 +113,27 @@ The CSV file must follow the same format as the Alternatives tab described above
 
 ---
 
-## Running the tests (developers)
+## Running locally / developing (developers)
 
-Requires Node.js 18 or later.
+Requires Node.js 18+.
+
+### 1. Serve the app
 
 ```bash
-npm test
+python3 -m http.server 8080
+# then open http://localhost:8080/app.html
 ```
 
-No packages to install. Tests cover all four MCDM methods and the CSV parser.
+Pyodide and pymcdm load from the internet on first use (~5–10 s, same as the Google Sheet fetch).
+
+### 2. Run the tests
+
+```bash
+npm install pyodide    # once — Node.js Pyodide runtime for tests
+npm test               # requires internet access (micropip fetches pymcdm from PyPI)
+```
+
+Tests validate TOPSIS and SAW scores against the reference answers in `planning/answers.csv`.
 
 ---
 

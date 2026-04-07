@@ -16,9 +16,10 @@
  */
 
 import { strict as assert } from 'node:assert';
-import { describe, it } from 'node:test';
+import { describe, it, before } from 'node:test';
 
 import {
+  initMCDM,
   rankOrderWeights,
   minMaxNormalize,
   vectorNormalize,
@@ -30,6 +31,8 @@ import {
   runMethod,
   METHODS
 } from '../js/mcdm.js';
+
+before(async () => { await initMCDM(); });
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Shared fixtures
