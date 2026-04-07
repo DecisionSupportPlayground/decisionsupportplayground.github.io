@@ -11,7 +11,7 @@
  *
  * The expected results for SAW and TOPSIS (equal weights) are taken from the
  * class exercise PDF (Part II, section 2.2):
- *   SAW ranking:    A2 > A3 > A1   (scores ≈ 0.66 / 0.46 / 0.40)
+ *   SAW ranking:    A2 > A3 > A1   (scores ≈ 0.57 / 0.43 / 0.34)
  *   TOPSIS ranking: A2 > A3 > A1   (scores ≈ 0.74 / 0.47 / 0.35)
  */
 
@@ -145,10 +145,10 @@ describe('saw', () => {
     });
   });
 
-  it('A2 score ≈ 0.66 (class exercise reference)', () => {
+  it('A2 score ≈ 0.57 (class exercise reference, max_normalization)', () => {
     const scores = saw(MATRIX, EQUAL_WEIGHTS, TYPES);
-    assert.ok(Math.abs(scores[1] - 0.66) < 0.02,
-      `Expected ≈ 0.66, got ${scores[1].toFixed(3)}`);
+    assert.ok(Math.abs(scores[1] - 0.57) < 0.02,
+      `Expected ≈ 0.57, got ${scores[1].toFixed(3)}`);
   });
 });
 

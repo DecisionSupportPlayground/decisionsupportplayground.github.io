@@ -45,50 +45,57 @@ let _py = null;
 export async function initMCDM() {
   if (_py) return; // already initialised
 
-  // ── Load Pyodide runtime ───────────────────────────────────────────────────
+  // ── Load Pyodide runtime and numpy ────────────────────────────────────────
   let pyodide;
   if (typeof globalThis.loadPyodide === 'function') {
     // Browser: pyodide.js was loaded from CDN; indexURL must match
     pyodide = await globalThis.loadPyodide({
       indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.27.0/full/'
     });
+    await pyodide.loadPackage(['numpy']);
+
+    // Load vendored pymcdm source from the local server (no PyPI needed)
+    const zipUrl = new URL('../vendor/pymcdm.zip', import.meta.url).href;
+    const zipResp = await fetch(zipUrl);
+    pyodide.unpackArchive(new Uint8Array(await zipResp.arrayBuffer()), 'zip', { extractDir: '/' });
   } else {
     // Node.js test environment: use the npm 'pyodide' package
     const { loadPyodide } = await import('pyodide');
     pyodide = await loadPyodide();
+    await pyodide.loadPackage(['numpy']);
+
+    // Load vendored pymcdm source from disk (no PyPI needed)
+    const { readFileSync } = await import('fs');
+    const { join, dirname } = await import('path');
+    const { fileURLToPath } = await import('url');
+    const __dir = dirname(fileURLToPath(import.meta.url));
+    const zipData = readFileSync(join(__dir, '../vendor/pymcdm.zip'));
+    pyodide.unpackArchive(new Uint8Array(zipData), 'zip', { extractDir: '/' });
   }
-
-  // ── Load numpy and micropip ────────────────────────────────────────────────
-  await pyodide.loadPackage(['numpy', 'micropip']);
-
-  // ── Install pymcdm from PyPI via micropip ────────────────────────────────
-  await pyodide.runPythonAsync(`
-import micropip
-await micropip.install('pymcdm', deps=False)
-`);
 
   // ── Instantiate methods ───────────────────────────────────────────────────
   // pymcdm renamed SAW → WSM between versions.  We try SAW first (older API),
-  // fall back to WSM (newer API).  For WSM we must use minmax_normalization to
-  // match the answers — the default sum_normalization breaks when any value = 0
-  // (e.g. I7 Evaporation Upstream has 0 for several alternatives).
+  // fall back to WSM (newer API).  Standard SAW uses max_normalization which
+  // handles zero values (e.g. I7 Evaporation Upstream = 0 for several alternatives).
   pyodide.runPython(`
+import sys
+sys.path.insert(0, '/')
 import numpy as np
 from pymcdm.methods import TOPSIS, MABAC, ARAS
+from pymcdm import normalizations
 
 try:
     from pymcdm.methods import SAW as _SAW_cls
     _saw_inst = _SAW_cls()
 except ImportError:
     from pymcdm.methods import WSM as _SAW_cls
-    from pymcdm import normalizations
-    _saw_inst = _SAW_cls(normalization_function=normalizations.minmax_normalization)
+    _saw_inst = _SAW_cls(normalization_function=normalizations.max_normalization)
 
 _methods = {
     'topsis': TOPSIS(),
     'saw':    _saw_inst,
     'mabac':  MABAC(),
-    'aras':   ARAS(),
+    'aras':   ARAS(normalization_function=normalizations.max_normalization),
 }
 `);
 

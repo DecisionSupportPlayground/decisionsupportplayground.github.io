@@ -56,7 +56,7 @@ class TOPSIS(MCDA_method):
                   label='pref', symbol='$P_i$', rows='A', cols=None)
     ]
 
-    def __init__(self, normalization_function=normalizations.minmax_normalization):
+    def __init__(self, normalization_function=normalizations.vector_normalization):
         self.normalization = normalization_function
 
     def _method(self, matrix, weights, types):
