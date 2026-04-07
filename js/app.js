@@ -52,7 +52,8 @@ const state = {
     team1: { ...DEFAULT_TEAM, name: 'Upper Basin' },
     team2: { ...DEFAULT_TEAM, name: 'Lower Basin' }
   },
-  results: { team1: [], team2: [] },
+  results:         { team1: [], team2: [] },
+  selectedResults: { team1: [], team2: [] }, // recalculated using selected alts only
   snapshots:       [],
   activeSnapshot:  null,
   lastModified:    null,
@@ -210,44 +211,37 @@ function recomputeAll() {
   recompute('team2');
 }
 
-function recompute(teamId) {
+function _computeResults(alts, teamId) {
   const team = state.teams[teamId];
-  const { criteria, alternatives } = state;
-
-  if (!alternatives.length || !criteria.length || !team.criteriaOrder.length) {
-    state.results[teamId] = [];
-    return;
-  }
+  const { criteria } = state;
 
   // Build ordered criteria list (skip any IDs not in current criteria set)
   const orderedCriteria = team.criteriaOrder
     .map(id => criteria.find(c => c.id === id))
     .filter(Boolean);
 
-  if (!orderedCriteria.length) { state.results[teamId] = []; return; }
+  if (!orderedCriteria.length) return [];
 
   const types   = orderedCriteria.map(c => c.type);
   const ranks   = orderedCriteria.map((_, i) => i + 1); // position = rank
-  const weights = rankOrderWeights(ranks, state.p); // shared p
+  const weights = rankOrderWeights(ranks, state.p);
 
-  // Slice the value columns to match orderedCriteria
-  const matrix = alternatives.map(alt =>
+  const matrix = alts.map(alt =>
     orderedCriteria.map(c => {
       const idx = criteria.findIndex(x => x.id === c.id);
       return idx >= 0 ? (alt.values[idx] ?? 0) : 0;
     })
   );
 
-  if (!_pyodideReady) { state.results[teamId] = []; return; }
   let scores;
   try {
-    scores = runMethod(state.method, matrix, weights, types); // shared method
+    scores = runMethod(state.method, matrix, weights, types);
   } catch {
-    scores = alternatives.map(() => 0);
+    scores = alts.map(() => 0);
   }
   const ranks2 = scoreToRank(scores);
 
-  state.results[teamId] = alternatives
+  return alts
     .map((alt, i) => ({
       id:          alt.id,
       description: alt.description,
@@ -256,6 +250,34 @@ function recompute(teamId) {
       isSelected:  team.selections.includes(alt.id)
     }))
     .sort((a, b) => a.rank - b.rank);
+}
+
+function recompute(teamId) {
+  const team = state.teams[teamId];
+  const { criteria, alternatives } = state;
+
+  if (!alternatives.length || !criteria.length || !team.criteriaOrder.length || !_pyodideReady) {
+    state.results[teamId] = [];
+    state.selectedResults[teamId] = [];
+    return;
+  }
+
+  state.results[teamId] = _computeResults(alternatives, teamId);
+
+  const selectedAlts = alternatives.filter(a => team.selections.includes(a.id));
+  state.selectedResults[teamId] = selectedAlts.length > 0
+    ? _computeResults(selectedAlts, teamId)
+    : [];
+}
+
+/** Returns selectedResults when any relevant "calc selected only" checkbox is checked, else full results. */
+function _activeResults(teamId) {
+  const calcEl         = document.getElementById(`${teamId}-calc-selected`);
+  const combinedCalcEl = document.getElementById('combined-calc-selected');
+  if ((calcEl?.checked || combinedCalcEl?.checked) && state.selectedResults[teamId].length > 0) {
+    return state.selectedResults[teamId];
+  }
+  return state.results[teamId] ?? [];
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -362,16 +384,11 @@ function updateDirtyIndicator(teamId) {
 }
 
 function renderResults(teamId) {
-  const team    = state.teams[teamId];
   const results = state.results[teamId] ?? [];
   const tbody   = document.getElementById(`${teamId}-results-body`);
-  const filterEl = document.getElementById(`${teamId}-filter-selected`);
   if (!tbody) return;
 
-  const selectedOnly = filterEl?.checked && team.selections.length > 0;
-  const rows = selectedOnly ? results.filter(r => r.isSelected) : results;
-
-  tbody.innerHTML = rows.map(r => `
+  tbody.innerHTML = results.map(r => `
     <tr class="${r.isSelected ? 'selected-alt' : ''}">
       <td class="rank-cell">${r.rank}</td>
       <td class="id-cell">${escHtml(r.id)}</td>
@@ -390,32 +407,11 @@ function renderChart(teamId) {
   const canvas = document.getElementById(`${teamId}-chart`);
   if (!canvas || typeof Chart === 'undefined') return;
 
-  const otherId     = teamId === 'team1' ? 'team2' : 'team1';
-  const ownSels     = new Set(state.teams[teamId].selections);
-  const otherSels   = new Set(state.teams[otherId].selections);
-  const allSels     = new Set([...ownSels, ...otherSels]);
-  const filterEl    = document.getElementById(`${teamId}-filter-selected`);
-  const selectedOnly = filterEl?.checked ?? false;
-  // When filtering: show the union of both teams' selections
-  const combinedFilterEl = document.getElementById('combined-filter-selected');
-  const anyFilter   = selectedOnly || (combinedFilterEl?.checked ?? false);
-
-  let results = state.results[teamId] ?? [];
+  const results = _activeResults(teamId);
   if (!results.length) { _destroyChart(canvas); return; }
 
-  // When filter is active, show union; each result gets selection grade:
-  //   'own'   = this team selected it  → full opacity
-  //   'other' = only other team        → faded (shows shared context)
-  //   'none'  = neither               → hidden (filtered out)
-  if (anyFilter) results = results.filter(r => allSels.has(r.id));
-  const graded = results.map(r => ({
-    ...r,
-    isOwn:   ownSels.has(r.id),
-    isOther: !ownSels.has(r.id) && otherSels.has(r.id)
-  }));
-
   const color = _cssVar(teamId === 'team1' ? '--team1' : '--team2');
-  _renderBarChart(canvas, graded, color);
+  _renderBarChart(canvas, results, color);
 }
 
 function renderSnapshotsList() {
@@ -441,8 +437,10 @@ function renderCombinedChart() {
   const canvas = document.getElementById('combined-chart');
   if (!canvas || typeof Chart === 'undefined') return;
 
-  const r1 = state.results.team1 ?? [];
-  const r2 = state.results.team2 ?? [];
+  const calcEl    = document.getElementById('combined-calc-selected');
+  const calcOnly  = calcEl?.checked ?? false;
+  const r1 = (calcOnly && state.selectedResults.team1.length > 0 ? state.selectedResults.team1 : state.results.team1) ?? [];
+  const r2 = (calcOnly && state.selectedResults.team2.length > 0 ? state.selectedResults.team2 : state.results.team2) ?? [];
   if (!r1.length && !r2.length) { _destroyChart(canvas); return; }
 
   const hasT1   = r1.length > 0;
@@ -457,8 +455,6 @@ function renderCombinedChart() {
     ...state.teams.team1.selections,
     ...state.teams.team2.selections
   ]);
-  const filterEl     = document.getElementById('combined-filter-selected');
-  const selectedOnly = filterEl?.checked ?? false;
 
   // Each entry carries per-team scores so we can build marker datasets below
   let sorted = allIds
@@ -470,8 +466,6 @@ function renderCombinedChart() {
                isSelected: allSelections.has(id) };
     })
     .sort((a, b) => b.score - a.score);
-
-  if (selectedOnly) sorted = sorted.filter(r => r.isSelected);
 
   // Team score markers: a line dataset per team, points only (no connecting line).
   // pointStyle:'line' + rotation:90 renders a short vertical tick at each score.
@@ -511,8 +505,10 @@ function renderCombinedSpiderChart() {
   const canvas = document.getElementById('combined-spider');
   if (!canvas || typeof Chart === 'undefined') return;
 
-  const r1 = state.results.team1 ?? [];
-  const r2 = state.results.team2 ?? [];
+  const calcEl   = document.getElementById('combined-calc-selected');
+  const calcOnly = calcEl?.checked ?? false;
+  const r1 = (calcOnly && state.selectedResults.team1.length > 0 ? state.selectedResults.team1 : state.results.team1) ?? [];
+  const r2 = (calcOnly && state.selectedResults.team2.length > 0 ? state.selectedResults.team2 : state.results.team2) ?? [];
   if (!r1.length && !r2.length) { _destroyChart(canvas); return; }
 
   // Criteria order: prefer team1's priority order
@@ -529,8 +525,6 @@ function renderCombinedSpiderChart() {
     ...state.teams.team1.selections,
     ...state.teams.team2.selections
   ]);
-  const filterEl     = document.getElementById('combined-filter-selected');
-  const selectedOnly = filterEl?.checked ?? false;
 
   const allIds  = [...new Set([...r1.map(r => r.id), ...r2.map(r => r.id)])];
   const divisor = (r1.length ? 1 : 0) + (r2.length ? 1 : 0);
@@ -542,7 +536,6 @@ function renderCombinedSpiderChart() {
     })
     .sort((a, b) => b.avg - a.avg);
 
-  if (selectedOnly) sorted = sorted.filter(r => r.isSelected);
   let displayIds = allSels.size > 0
     ? sorted.filter(r => allSels.has(r.id)).map(r => r.id)
     : sorted.slice(0, 5).map(r => r.id);
@@ -648,8 +641,10 @@ function renderCombinedTable() {
   const wrap = document.getElementById('combined-criteria-table-wrap');
   if (!wrap || wrap.hidden) return;
 
-  const r1 = state.results.team1 ?? [];
-  const r2 = state.results.team2 ?? [];
+  const calcEl   = document.getElementById('combined-calc-selected');
+  const calcOnly = calcEl?.checked ?? false;
+  const r1 = (calcOnly && state.selectedResults.team1.length > 0 ? state.selectedResults.team1 : state.results.team1) ?? [];
+  const r2 = (calcOnly && state.selectedResults.team2.length > 0 ? state.selectedResults.team2 : state.results.team2) ?? [];
   if (!r1.length && !r2.length) {
     wrap.innerHTML = '<p class="empty-msg" style="padding:.75rem 1rem">No data</p>';
     return;
@@ -660,12 +655,10 @@ function renderCombinedTable() {
   if (!orderedCriteria.length) { wrap.innerHTML = ''; return; }
 
   // Alternatives sorted by average combined score
-  const allSels  = new Set([...state.teams.team1.selections, ...state.teams.team2.selections]);
-  const filterEl = document.getElementById('combined-filter-selected');
-  const selectedOnly = filterEl?.checked ?? false;
-  const divisor  = (r1.length ? 1 : 0) + (r2.length ? 1 : 0);
-  const allIds   = [...new Set([...r1.map(r => r.id), ...r2.map(r => r.id)])];
-  let rows = allIds
+  const allSels = new Set([...state.teams.team1.selections, ...state.teams.team2.selections]);
+  const divisor = (r1.length ? 1 : 0) + (r2.length ? 1 : 0);
+  const allIds  = [...new Set([...r1.map(r => r.id), ...r2.map(r => r.id)])];
+  const rows = allIds
     .map(id => {
       const s1  = r1.find(r => r.id === id)?.score ?? 0;
       const s2  = r2.find(r => r.id === id)?.score ?? 0;
@@ -674,7 +667,6 @@ function renderCombinedTable() {
                description: alt?.description ?? '' };
     })
     .sort((a, b) => b.score - a.score);
-  if (selectedOnly) rows = rows.filter(r => r.isSelected);
 
   if (!rows.length) {
     wrap.innerHTML = '<p class="empty-msg" style="padding:.75rem 1rem">No data</p>';
@@ -843,18 +835,7 @@ function renderCriteriaTable(teamId) {
   const wrap = document.getElementById(`${teamId}-criteria-table-wrap`);
   if (!wrap || wrap.hidden) return;
 
-  const team    = state.teams[teamId];
-  const results = state.results[teamId] ?? [];
-
-  const filterEl         = document.getElementById(`${teamId}-filter-selected`);
-  const combinedFilterEl = document.getElementById('combined-filter-selected');
-  const anyFilter        = (filterEl?.checked ?? false) || (combinedFilterEl?.checked ?? false);
-  const ownSels          = new Set(team.selections);
-  const otherSels        = new Set(state.teams[teamId === 'team1' ? 'team2' : 'team1'].selections);
-  const allSels          = new Set([...ownSels, ...otherSels]);
-
-  let rows = results;
-  if (anyFilter) rows = rows.filter(r => allSels.has(r.id));
+  const rows = _activeResults(teamId);
 
   if (!rows.length) {
     wrap.innerHTML = '<p class="empty-msg" style="padding:.75rem 1rem">No data</p>';
@@ -910,7 +891,7 @@ function renderSpiderChart(teamId) {
   if (!canvas || typeof Chart === 'undefined') return;
 
   const team    = state.teams[teamId];
-  const results = state.results[teamId] ?? [];
+  const results = _activeResults(teamId);
   if (!results.length) { _destroyChart(canvas); return; }
 
   const orderedCriteria = team.criteriaOrder
@@ -918,7 +899,8 @@ function renderSpiderChart(teamId) {
     .filter(Boolean);
   if (!orderedCriteria.length) { _destroyChart(canvas); return; }
 
-  // Alternatives to display: selected ones, else top 5
+  // Alternatives to display: selected ones, else top 5.
+  // When "calc selected only" is active, results already contains only selected alts.
   const sels = team.selections;
   let displayResults = sels.length > 0
     ? results.filter(r => sels.includes(r.id))
@@ -1097,11 +1079,12 @@ function wireGlobalButtons() {
     }
   });
 
-  // Filter-selected checkboxes (event delegation)
+  // Calc-selected checkboxes (event delegation)
   document.addEventListener('change', e => {
-    if (e.target.classList.contains('filter-checkbox')) {
-      // Any filter change affects all three charts (union of both selections)
-      for (const teamId of TEAMS) { renderResults(teamId); renderChart(teamId); renderCriteriaTable(teamId); renderSpiderChart(teamId); }
+    if (e.target.classList.contains('calc-selected-checkbox')) {
+      // Switching the checkbox just changes which results are displayed — no recompute needed.
+      // renderResults is intentionally excluded: the ranked-alternatives list always shows the full set.
+      for (const teamId of TEAMS) { renderChart(teamId); renderCriteriaTable(teamId); renderSpiderChart(teamId); }
       renderCombinedChart();
       renderCombinedSpiderChart();
       renderCombinedTable();
@@ -1118,10 +1101,12 @@ function wireGlobalButtons() {
         state.teams[teamId].selections = sels.filter(a => a !== alt);
       }
       state.teams[teamId].isDirty = true;
-      recompute(teamId);   // isSelected flag changes
+      recompute(teamId);   // recomputes both full and selectedResults
       renderResults(teamId);
-      for (const id of TEAMS) { renderChart(id); renderCriteriaTable(id); }
+      for (const id of TEAMS) { renderChart(id); renderCriteriaTable(id); renderSpiderChart(id); }
       renderCombinedChart();
+      renderCombinedSpiderChart();
+      renderCombinedTable();
       updateDirtyIndicator(teamId);
     }
   });
