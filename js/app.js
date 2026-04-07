@@ -29,7 +29,8 @@ import {
 // State
 // ─────────────────────────────────────────────────────────────────────────────
 
-const TEAMS = ['team1', 'team2'];
+const TEAMS     = ['team1', 'team2'];
+const CACHE_KEY = 'madm_sheet_cache';
 
 const DEFAULT_TEAM = {
   criteriaOrder: [], // ['I1','I2',...] — index 0 = rank 1 (highest priority)
@@ -98,12 +99,23 @@ document.addEventListener('DOMContentLoaded', () => {
     return; // no polling in offline mode
   }
 
-  // Online mode
-  setStatus('loading', 'Connecting to sheet…');
+  // Online mode — render from cache immediately, then refresh in background
+  const cached = _loadCache();
+  if (cached) {
+    applySheetData(cached);
+    setStatus('cached', 'Cached data — syncing…');
+  } else {
+    setStatus('loading', 'Connecting to sheet…');
+  }
+
   fetchSheetData(scriptUrl)
-    .then(applySheetData)
+    .then(data => { _saveCache(data); applySheetData(data); })
     .catch(err => {
-      setStatus('error', `Could not reach sheet: ${err.message}`);
+      if (cached) {
+        setStatus('cached', 'Sheet unreachable — showing cached data');
+      } else {
+        setStatus('error', `Could not reach sheet: ${err.message}`);
+      }
     });
 
   startPolling();
@@ -241,6 +253,8 @@ function renderAllPanels() {
   renderSharedSettings();
   for (const teamId of TEAMS) renderPanel(teamId);
   renderCombinedChart();
+  renderCombinedSpiderChart();
+  renderCombinedTable();
   renderSnapshotsList();
 }
 
@@ -248,6 +262,8 @@ function renderPanel(teamId) {
   renderCriteriaList(teamId);
   renderResults(teamId);
   renderChart(teamId);
+  renderCriteriaTable(teamId);
+  renderSpiderChart(teamId);
 }
 
 function renderCriteriaList(teamId) {
@@ -276,11 +292,12 @@ function renderCriteriaList(teamId) {
     const typeIcon  = c.type === 1 ? '↑' : '↓';
     const typeLabel = c.type === 1 ? 'benefit' : 'cost';
     const weightPct = weights[idx] !== undefined ? (weights[idx] * 100).toFixed(1) + '%' : '';
+    const critIcon  = _criterionIcon(c);
 
     li.innerHTML = `
       <span class="drag-handle" aria-label="Drag to reorder">⠿</span>
       <span class="criterion-rank">${idx + 1}</span>
-      <span class="criterion-name" title="${escHtml(c.name)}">${escHtml(c.shortName)}</span>
+      <span class="criterion-name" title="${critIcon ? critIcon + ' ' : ''}${escHtml(c.name)}">${critIcon ? critIcon + ' ' : ''}${escHtml(c.shortName)}</span>
       <span class="criterion-weight">${escHtml(weightPct)}</span>
       <span class="criterion-type ${typeLabel}" title="${typeLabel}: ${typeLabel === 'benefit' ? 'the higher the better' : 'the higher the worst'}">${typeIcon}</span>
     `;
@@ -301,7 +318,10 @@ function renderCriteriaList(teamId) {
       renderCriteriaList(teamId);
       renderResults(teamId);
       renderChart(teamId);
+      renderSpiderChart(teamId);
       renderCombinedChart();
+      renderCombinedSpiderChart();
+      renderCombinedTable();
       updateDirtyIndicator(teamId);
     }
   });
@@ -465,6 +485,219 @@ function renderCombinedChart() {
 }
 
 /**
+ * Radar/spider chart for the combined view.
+ * Axes = criteria (in team1's priority order, falling back to state.criteria order).
+ * Datasets = alternatives selected by either team (or top 5 by avg score if none).
+ * Values are normalised 0–1 per criterion; cost criteria are inverted.
+ * Legend items are clickable (Chart.js default) to show/hide individual alternatives.
+ */
+function renderCombinedSpiderChart() {
+  const wrap = document.getElementById('combined-spider-wrap');
+  if (!wrap || wrap.hidden) return;
+
+  const canvas = document.getElementById('combined-spider');
+  if (!canvas || typeof Chart === 'undefined') return;
+
+  const r1 = state.results.team1 ?? [];
+  const r2 = state.results.team2 ?? [];
+  if (!r1.length && !r2.length) { _destroyChart(canvas); return; }
+
+  // Criteria order: prefer team1's priority order
+  const refOrder = state.teams.team1.criteriaOrder.length
+    ? state.teams.team1.criteriaOrder
+    : state.criteria.map(c => c.id);
+  const orderedCriteria = refOrder
+    .map(id => state.criteria.find(c => c.id === id))
+    .filter(Boolean);
+  if (!orderedCriteria.length) { _destroyChart(canvas); return; }
+
+  // Alternatives to show: union of selections, or top 5 by avg score
+  const allSels = new Set([
+    ...state.teams.team1.selections,
+    ...state.teams.team2.selections
+  ]);
+  const filterEl     = document.getElementById('combined-filter-selected');
+  const selectedOnly = filterEl?.checked ?? false;
+
+  const allIds  = [...new Set([...r1.map(r => r.id), ...r2.map(r => r.id)])];
+  const divisor = (r1.length ? 1 : 0) + (r2.length ? 1 : 0);
+  let sorted = allIds
+    .map(id => {
+      const s1  = r1.find(r => r.id === id)?.score ?? 0;
+      const s2  = r2.find(r => r.id === id)?.score ?? 0;
+      return { id, avg: (s1 + s2) / divisor, isSelected: allSels.has(id) };
+    })
+    .sort((a, b) => b.avg - a.avg);
+
+  if (selectedOnly) sorted = sorted.filter(r => r.isSelected);
+  let displayIds = allSels.size > 0
+    ? sorted.filter(r => allSels.has(r.id)).map(r => r.id)
+    : sorted.slice(0, 5).map(r => r.id);
+  if (!displayIds.length) displayIds = sorted.slice(0, 5).map(r => r.id);
+
+  // Per-criterion min/max across ALL alternatives for consistent normalisation
+  const colStats = orderedCriteria.map(crit => {
+    const ci   = state.criteria.findIndex(c => c.id === crit.id);
+    const vals = state.alternatives.map(a => a.values[ci]).filter(v => v != null);
+    return { min: Math.min(...vals), max: Math.max(...vals) };
+  });
+
+  const PALETTE = [
+    _cssVar('--team1'),
+    _cssVar('--team2'),
+    _cssVar('--combined'),
+    '#a78bfa',
+    '#fb923c',
+  ];
+
+  const datasets = displayIds.map((id, di) => {
+    const alt  = state.alternatives.find(a => a.id === id);
+    const data = orderedCriteria.map((crit, ci) => {
+      const idx = state.criteria.findIndex(c => c.id === crit.id);
+      const v   = alt?.values[idx] ?? null;
+      if (v == null) return 0;
+      const { min, max } = colStats[ci];
+      if (max === min) return 0.5;
+      const t = (v - min) / (max - min);
+      return crit.type === 1 ? t : 1 - t;
+    });
+    const color = PALETTE[di % PALETTE.length];
+    return {
+      label:                id,
+      data,
+      backgroundColor:      _hexToRgba(color, 0.12),
+      borderColor:          color,
+      pointBackgroundColor: color,
+      pointRadius:          3,
+      borderWidth:          2
+    };
+  });
+
+  const gridColor = _cssVar('--border');
+  const tickColor = _cssVar('--text-muted');
+  const chartData = {
+    labels:   orderedCriteria.map(c => { const ci = _criterionIcon(c); return ci ? `${ci} ${c.shortName || c.id}` : (c.shortName || c.id); }),
+    datasets
+  };
+
+  if (canvas._chart) {
+    canvas._chart.data = chartData;
+    canvas._chart.update('none');
+    return;
+  }
+
+  canvas._chart = new Chart(canvas, {
+    type: 'radar',
+    data: chartData,
+    options: {
+      responsive:          true,
+      maintainAspectRatio: true,
+      aspectRatio:         1,
+      scales: {
+        r: {
+          min: 0,
+          max: 1,
+          ticks:       { display: false },
+          grid:        { color: gridColor },
+          angleLines:  { color: gridColor },
+          pointLabels: { color: tickColor, font: { size: 10 } }
+        }
+      },
+      plugins: {
+        legend: {
+          display:  true,
+          position: 'bottom',
+          labels:   { color: tickColor, boxWidth: 10, padding: 8, font: { size: 11 } }
+        },
+        tooltip: {
+          callbacks: {
+            label: ctx => {
+              const id   = displayIds[ctx.datasetIndex];
+              const crit = orderedCriteria[ctx.dataIndex];
+              const alt  = state.alternatives.find(a => a.id === id);
+              const idx  = state.criteria.findIndex(c => c.id === crit?.id);
+              const raw  = alt?.values[idx];
+              const norm = ctx.parsed.r?.toFixed(2);
+              return ` ${id} — ${crit?.shortName || crit?.id}: ${raw != null ? raw : 'N/A'} (norm ${norm})`;
+            }
+          }
+        }
+      }
+    }
+  });
+}
+
+/**
+ * Heatmap table for the combined view.
+ * Columns = criteria in team1's priority order; rows = alternatives sorted by avg score.
+ */
+function renderCombinedTable() {
+  const wrap = document.getElementById('combined-criteria-table-wrap');
+  if (!wrap || wrap.hidden) return;
+
+  const r1 = state.results.team1 ?? [];
+  const r2 = state.results.team2 ?? [];
+  if (!r1.length && !r2.length) {
+    wrap.innerHTML = '<p class="empty-msg" style="padding:.75rem 1rem">No data</p>';
+    return;
+  }
+
+  // Criteria in original sheet order (matches the Google doc)
+  const orderedCriteria = state.criteria.filter(Boolean);
+  if (!orderedCriteria.length) { wrap.innerHTML = ''; return; }
+
+  // Alternatives sorted by average combined score
+  const allSels  = new Set([...state.teams.team1.selections, ...state.teams.team2.selections]);
+  const filterEl = document.getElementById('combined-filter-selected');
+  const selectedOnly = filterEl?.checked ?? false;
+  const divisor  = (r1.length ? 1 : 0) + (r2.length ? 1 : 0);
+  const allIds   = [...new Set([...r1.map(r => r.id), ...r2.map(r => r.id)])];
+  let rows = allIds
+    .map(id => {
+      const s1  = r1.find(r => r.id === id)?.score ?? 0;
+      const s2  = r2.find(r => r.id === id)?.score ?? 0;
+      const alt = state.alternatives.find(a => a.id === id);
+      return { id, score: (s1 + s2) / divisor, isSelected: allSels.has(id),
+               description: alt?.description ?? '' };
+    })
+    .sort((a, b) => b.score - a.score);
+  if (selectedOnly) rows = rows.filter(r => r.isSelected);
+
+  if (!rows.length) {
+    wrap.innerHTML = '<p class="empty-msg" style="padding:.75rem 1rem">No data</p>';
+    return;
+  }
+
+  // Per-column min/max for displayed rows
+  const colStats = orderedCriteria.map(crit => {
+    const ci   = state.criteria.findIndex(c => c.id === crit.id);
+    const vals = rows
+      .map(r => state.alternatives.find(a => a.id === r.id)?.values[ci])
+      .filter(v => v != null);
+    return { min: Math.min(...vals), max: Math.max(...vals) };
+  });
+
+  const thead = `<thead><tr>
+    <th class="cvt-id"></th>
+    ${orderedCriteria.map(c => { const ci = _criterionIcon(c); return `<th title="${ci ? ci + ' ' : ''}${escHtml(c.name)} (${c.type === 1 ? '↑ benefit' : '↓ cost'})">${ci ? ci + ' ' : ''}${escHtml(c.id)}</th>`; }).join('')}
+  </tr></thead>`;
+
+  const tbody = `<tbody>${rows.map(r => {
+    const alt   = state.alternatives.find(a => a.id === r.id);
+    const cells = orderedCriteria.map((crit, ci) => {
+      const idx = state.criteria.findIndex(c => c.id === crit.id);
+      const v   = alt?.values[idx] ?? null;
+      const bg  = v != null ? _heatmapColor(v, colStats[ci].min, colStats[ci].max, crit.type) : 'var(--surface2)';
+      return `<td class="cvt-cell" style="background:${bg}" title="${escHtml(crit.id)}: ${v != null ? v : '—'}">${v != null ? v : '—'}</td>`;
+    }).join('');
+    const rowTitle = ` title="${escHtml(r.id)}: ${escHtml(r.description)}"`;
+    return `<tr class="${r.isSelected ? 'selected-alt' : ''}"${rowTitle}><td class="cvt-id">${escHtml(r.id)}</td>${cells}</tr>`;
+  }).join('')}</tbody>`;
+
+  wrap.innerHTML = `<div class="cvt-scroll"><table class="criteria-values-table">${thead}${tbody}</table></div>`;
+}
+
+/**
  * Shared horizontal bar chart renderer used by all three score charts.
  *
  * Every bar is a fixed pixel height (BAR_PX) so bar thickness looks identical
@@ -525,9 +758,10 @@ function _renderBarChart(canvas, results, color, opts = {}) {
 
   if (canvas._chart) {
     canvas._results = results;
-    canvas._chart.data = chartData;
-    canvas._chart.resize();
-    canvas._chart.update('none');
+    canvas._chart.data.labels   = chartData.labels;
+    canvas._chart.data.datasets = chartData.datasets;
+    if (!canvas.closest('[hidden]')) canvas._chart.resize();
+    canvas._chart.update();
     return;
   }
 
@@ -561,6 +795,212 @@ function _renderBarChart(canvas, results, color, opts = {}) {
         }
       },
       scales: _baseChartScales(tickColor, gridColor)
+    }
+  });
+}
+
+/**
+ * RdYlGn colormap: goodness 0 (worst) → red, 0.5 → yellow, 1 (best) → green.
+ * Returns a solid rgb() string for use as a cell background.
+ */
+function _heatmapColor(val, min, max, type) {
+  if (max === min) return 'var(--surface2)';
+  const t        = (val - min) / (max - min);
+  const goodness = type === 1 ? t : 1 - t;
+  let r, g, b;
+  if (goodness <= 0.5) {
+    const f = goodness * 2;                      // 0→1 : red→yellow
+    r = Math.round(220 + (254 - 220) * f);
+    g = Math.round( 53 + (220 -  53) * f);
+    b = Math.round( 69 + ( 83 -  69) * f);
+  } else {
+    const f = (goodness - 0.5) * 2;             // 0→1 : yellow→green
+    r = Math.round(254 + ( 58 - 254) * f);
+    g = Math.round(220 + (191 - 220) * f);
+    b = Math.round( 83 + (143 -  83) * f);
+  }
+  return `rgb(${r},${g},${b})`;
+}
+
+/**
+ * Render the criteria-values heatmap table for a team panel.
+ * Only executes when the table view is visible (chart-wrap is hidden).
+ */
+function renderCriteriaTable(teamId) {
+  const wrap = document.getElementById(`${teamId}-criteria-table-wrap`);
+  if (!wrap || wrap.hidden) return;
+
+  const team    = state.teams[teamId];
+  const results = state.results[teamId] ?? [];
+
+  const filterEl         = document.getElementById(`${teamId}-filter-selected`);
+  const combinedFilterEl = document.getElementById('combined-filter-selected');
+  const anyFilter        = (filterEl?.checked ?? false) || (combinedFilterEl?.checked ?? false);
+  const ownSels          = new Set(team.selections);
+  const otherSels        = new Set(state.teams[teamId === 'team1' ? 'team2' : 'team1'].selections);
+  const allSels          = new Set([...ownSels, ...otherSels]);
+
+  let rows = results;
+  if (anyFilter) rows = rows.filter(r => allSels.has(r.id));
+
+  if (!rows.length) {
+    wrap.innerHTML = '<p class="empty-msg" style="padding:.75rem 1rem">No data</p>';
+    return;
+  }
+
+  // Criteria in original sheet order (matches the Google doc)
+  const orderedCriteria = state.criteria.filter(Boolean);
+
+  if (!orderedCriteria.length) { wrap.innerHTML = ''; return; }
+
+  // Per-column min/max for the displayed rows
+  const colStats = orderedCriteria.map(crit => {
+    const ci   = state.criteria.findIndex(c => c.id === crit.id);
+    const vals = rows
+      .map(r => state.alternatives.find(a => a.id === r.id)?.values[ci])
+      .filter(v => v != null);
+    return { min: Math.min(...vals), max: Math.max(...vals) };
+  });
+
+  const thead = `<thead><tr>
+    <th class="cvt-id"></th>
+    ${orderedCriteria.map(c => { const ci = _criterionIcon(c); return `<th title="${ci ? ci + ' ' : ''}${escHtml(c.name)} (${c.type === 1 ? '↑ benefit' : '↓ cost'})">${ci ? ci + ' ' : ''}${escHtml(c.id)}</th>`; }).join('')}
+  </tr></thead>`;
+
+  const tbody = `<tbody>${rows.map(r => {
+    const alt   = state.alternatives.find(a => a.id === r.id);
+    const cells = orderedCriteria.map((crit, ci) => {
+      const idx = state.criteria.findIndex(c => c.id === crit.id);
+      const v   = alt?.values[idx] ?? null;
+      const bg  = v != null ? _heatmapColor(v, colStats[ci].min, colStats[ci].max, crit.type) : 'var(--surface2)';
+      return `<td class="cvt-cell" style="background:${bg}" title="${escHtml(crit.id)}: ${v != null ? v : '—'}">${v != null ? v : '—'}</td>`;
+    }).join('');
+    const rowTitle = ` title="${escHtml(r.id)}: ${escHtml(r.description)}"`;
+    return `<tr class="${r.isSelected ? 'selected-alt' : ''}"${rowTitle}><td class="cvt-id">${escHtml(r.id)}</td>${cells}</tr>`;
+  }).join('')}</tbody>`;
+
+  wrap.innerHTML = `<div class="cvt-scroll"><table class="criteria-values-table">${thead}${tbody}</table></div>`;
+}
+
+/**
+ * Render a radar/spider chart for one team.
+ * Each axis = one criterion (in team's priority order), normalised 0–1.
+ * Benefit criteria: higher raw → higher on chart.
+ * Cost criteria: lower raw → higher on chart (inverted).
+ * Shows selected alternatives, or the top 5 if none are selected.
+ */
+function renderSpiderChart(teamId) {
+  const wrap = document.getElementById(`${teamId}-spider-wrap`);
+  if (!wrap || wrap.hidden) return;
+
+  const canvas = document.getElementById(`${teamId}-spider`);
+  if (!canvas || typeof Chart === 'undefined') return;
+
+  const team    = state.teams[teamId];
+  const results = state.results[teamId] ?? [];
+  if (!results.length) { _destroyChart(canvas); return; }
+
+  const orderedCriteria = team.criteriaOrder
+    .map(id => state.criteria.find(c => c.id === id))
+    .filter(Boolean);
+  if (!orderedCriteria.length) { _destroyChart(canvas); return; }
+
+  // Alternatives to display: selected ones, else top 5
+  const sels = team.selections;
+  let displayResults = sels.length > 0
+    ? results.filter(r => sels.includes(r.id))
+    : results.slice(0, 5);
+  if (!displayResults.length) displayResults = results.slice(0, 5);
+
+  // Per-criterion min/max across ALL alternatives for consistent normalisation
+  const colStats = orderedCriteria.map(crit => {
+    const ci   = state.criteria.findIndex(c => c.id === crit.id);
+    const vals = state.alternatives.map(a => a.values[ci]).filter(v => v != null);
+    return { min: Math.min(...vals), max: Math.max(...vals) };
+  });
+
+  const teamColor = _cssVar(teamId === 'team1' ? '--team1' : '--team2');
+  const PALETTE   = [
+    teamColor,
+    _cssVar('--combined'),
+    '#a78bfa', // violet
+    '#fb923c', // orange
+    '#34d399', // emerald
+  ];
+
+  const datasets = displayResults.map((r, di) => {
+    const alt   = state.alternatives.find(a => a.id === r.id);
+    const data  = orderedCriteria.map((crit, ci) => {
+      const idx = state.criteria.findIndex(c => c.id === crit.id);
+      const v   = alt?.values[idx] ?? null;
+      if (v == null) return 0;
+      const { min, max } = colStats[ci];
+      if (max === min) return 0.5;
+      const t = (v - min) / (max - min);
+      return crit.type === 1 ? t : 1 - t; // invert cost criteria
+    });
+    const color = PALETTE[di % PALETTE.length];
+    return {
+      label:                r.id,
+      data,
+      backgroundColor:      _hexToRgba(color, 0.12),
+      borderColor:          color,
+      pointBackgroundColor: color,
+      pointRadius:          3,
+      borderWidth:          2
+    };
+  });
+
+  const gridColor  = _cssVar('--border');
+  const tickColor  = _cssVar('--text-muted');
+  const chartData  = {
+    labels:   orderedCriteria.map(c => { const ci = _criterionIcon(c); return ci ? `${ci} ${c.shortName || c.id}` : (c.shortName || c.id); }),
+    datasets
+  };
+
+  if (canvas._chart) {
+    canvas._chart.data = chartData;
+    canvas._chart.update('none');
+    return;
+  }
+
+  canvas._chart = new Chart(canvas, {
+    type: 'radar',
+    data: chartData,
+    options: {
+      responsive:          true,
+      maintainAspectRatio: true,
+      aspectRatio:         1,
+      scales: {
+        r: {
+          min: 0,
+          max: 1,
+          ticks:       { display: false },
+          grid:        { color: gridColor },
+          angleLines:  { color: gridColor },
+          pointLabels: { color: tickColor, font: { size: 10 } }
+        }
+      },
+      plugins: {
+        legend: {
+          display:  true,
+          position: 'bottom',
+          labels:   { color: tickColor, boxWidth: 10, padding: 8, font: { size: 11 } }
+        },
+        tooltip: {
+          callbacks: {
+            label: ctx => {
+              const r    = displayResults[ctx.datasetIndex];
+              const crit = orderedCriteria[ctx.dataIndex];
+              const alt  = state.alternatives.find(a => a.id === r?.id);
+              const idx  = state.criteria.findIndex(c => c.id === crit?.id);
+              const raw  = alt?.values[idx];
+              const norm = ctx.parsed.r?.toFixed(2);
+              return ` ${r?.id} — ${crit?.shortName || crit?.id}: ${raw != null ? raw : 'N/A'} (norm ${norm})`;
+            }
+          }
+        }
+      }
     }
   });
 }
@@ -610,12 +1050,48 @@ function wireGlobalButtons() {
     });
   });
 
+  // View toggle: bar ↔ spider ↔ table (icon buttons), shared by team panels and combined
+  document.addEventListener('click', e => {
+    const btn = e.target.closest('.btn-view-icon');
+    if (!btn) return;
+    const group = btn.closest('.view-toggle-group');
+    if (!group) return;
+    const teamId = group.dataset.team;
+    const view   = btn.dataset.view;
+    group.querySelectorAll('.btn-view-icon').forEach(b => b.classList.toggle('active', b === btn));
+    if (teamId === 'combined') {
+      const chartWrap  = document.getElementById('combined-chart-wrap');
+      const spiderWrap = document.getElementById('combined-spider-wrap');
+      const tableWrap  = document.getElementById('combined-criteria-table-wrap');
+      if (!chartWrap || !spiderWrap || !tableWrap) return;
+      chartWrap.hidden  = view !== 'bar';
+      spiderWrap.hidden = view !== 'spider';
+      tableWrap.hidden  = view !== 'table';
+      if (view === 'spider') renderCombinedSpiderChart();
+      if (view === 'table')  renderCombinedTable();
+      if (view === 'bar')    renderCombinedChart();
+    } else {
+      const chartWrap  = document.getElementById(`${teamId}-chart-wrap`);
+      const spiderWrap = document.getElementById(`${teamId}-spider-wrap`);
+      const tableWrap  = document.getElementById(`${teamId}-criteria-table-wrap`);
+      if (!chartWrap || !spiderWrap || !tableWrap) return;
+      chartWrap.hidden  = view !== 'bar';
+      spiderWrap.hidden = view !== 'spider';
+      tableWrap.hidden  = view !== 'table';
+      if (view === 'table')  renderCriteriaTable(teamId);
+      if (view === 'spider') renderSpiderChart(teamId);
+      if (view === 'bar')    renderChart(teamId);
+    }
+  });
+
   // Filter-selected checkboxes (event delegation)
   document.addEventListener('change', e => {
     if (e.target.classList.contains('filter-checkbox')) {
       // Any filter change affects all three charts (union of both selections)
-      for (const teamId of TEAMS) { renderResults(teamId); renderChart(teamId); }
+      for (const teamId of TEAMS) { renderResults(teamId); renderChart(teamId); renderCriteriaTable(teamId); renderSpiderChart(teamId); }
       renderCombinedChart();
+      renderCombinedSpiderChart();
+      renderCombinedTable();
     }
 
     // Alternative selection checkboxes
@@ -631,7 +1107,7 @@ function wireGlobalButtons() {
       state.teams[teamId].isDirty = true;
       recompute(teamId);   // isSelected flag changes
       renderResults(teamId);
-      for (const id of TEAMS) renderChart(id); // both charts reflect updated selections
+      for (const id of TEAMS) { renderChart(id); renderCriteriaTable(id); }
       renderCombinedChart();
       updateDirtyIndicator(teamId);
     }
@@ -719,6 +1195,7 @@ function startPolling() {
       const ts = await fetchLastModified(state.scriptUrl);
       if (ts && ts !== state.lastModified) {
         const data = await fetchSheetData(state.scriptUrl);
+        _saveCache(data);
         applySheetData(data);
       }
       setStatus('ok', '');
@@ -739,17 +1216,30 @@ function setStatus(type, message) {
   const dot = document.getElementById('sync-dot');
   if (!el) return;
   el.textContent = message;
-  ['ok', 'loading', 'error', 'offline'].forEach(c => el.classList.remove(c));
+  ['ok', 'loading', 'error', 'offline', 'cached'].forEach(c => el.classList.remove(c));
   el.classList.add(type);
   if (dot) {
     dot.className = `sync-dot ${type}`;
     dot.title = message || type;
   }
-  // Update "last synced" timestamp
   if (type === 'ok') {
     const ts = document.getElementById('last-synced');
     if (ts) ts.textContent = `Last synced: ${new Date().toLocaleTimeString()}`;
   }
+}
+
+function _saveCache(data) {
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), data }));
+  } catch { /* quota exceeded — ignore */ }
+}
+
+function _loadCache() {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw).data ?? null;
+  } catch { return null; }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -855,6 +1345,8 @@ function _onSharedSettingChanged() {
     updateDirtyIndicator(teamId);
   }
   renderCombinedChart();
+  renderCombinedSpiderChart();
+  renderCombinedTable();
 }
 
 /** Convert a CSS hex color (#rrggbb) to rgba(r,g,b,alpha) for canvas compatibility. */
@@ -864,6 +1356,61 @@ function _hexToRgba(hex, alpha) {
   const g = parseInt(h.slice(2, 4), 16);
   const b = parseInt(h.slice(4, 6), 16);
   return `rgba(${r},${g},${b},${alpha})`;
+}
+
+/**
+ * Return an emoji icon for a criterion, matched by keywords in its name.
+ * Rules are ordered: more-specific patterns before generic ones.
+ * Returns '' (empty string) if no rule matches.
+ *
+ * This is the single source of truth for criterion icons — used in table
+ * headers, the criteria priority list, spider chart axis labels, and any
+ * tooltips, so the icon↔criterion connection is always consistent.
+ */
+function _criterionIcon(criterion) {
+  const text = `${criterion.name ?? ''} ${criterion.shortName ?? ''}`.toLowerCase();
+  const rules = [
+    // Navigability — size-specific before generic (big ship > ferry > sailboat)
+    [/navigab.*(big|large)|(big|large).*vessel/,    '🚢'],
+    [/navigab.*medium|medium.*vessel/,               '⛴️'],
+    [/navigab.*(small)|small.*vessel/,               '⛵'],
+    [/navigab/,                                      '⛵'],
+    // Energy / power
+    [/energy|power|electricity|hydropower|gwh/,      '⚡'],
+    // Birds / wildlife
+    [/bird/,                                         '🐦'],
+    // Food production — location before generic
+    [/food.*(down|downstream)|downstream.*food/,     '🌽🏞️'],
+    [/food.*(up|upstream)|upstream.*food/,           '🌽🏔️'],
+    [/food|crop|agricult|irrigat|maize|grain/,       '🌽'],
+    // Evaporation — location before generic
+    [/evap.*(down|downstream)|downstream.*evap/,     '☀️🏞️'],
+    [/evap.*(up|upstream)|upstream.*evap/,           '☀️🏔️'],
+    [/wetland.*evap|evap.*wetland/,                  '🌿☀️'],
+    [/evapor/,                                       '☀️'],
+    // Wetlands (non-evap)
+    [/wetland/,                                      '🌿'],
+    // Forest / vegetation
+    [/forest|woodland|tree/,                         '🌲'],
+    // Cost / investment
+    [/cost|invest|budget|expenditure/,               '💰'],
+    // Discharge / flow
+    [/discharge|flow|runoff/,                        '🌊'],
+    // Social
+    [/social|community|displace|accept/,             '👥'],
+    // Sediment
+    [/sediment|silt/,                                '🪨'],
+    // Flood
+    [/flood/,                                        '🌊'],
+    // Carbon / GHG
+    [/carbon|emission|ghg|greenhouse/,               '🌫️'],
+    // Habitat (generic fallback)
+    [/habitat/,                                      '🌿'],
+  ];
+  for (const [rx, icon] of rules) {
+    if (rx.test(text)) return icon;
+  }
+  return '';
 }
 
 function escHtml(str) {

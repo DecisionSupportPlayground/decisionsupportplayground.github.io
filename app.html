@@ -74,10 +74,19 @@
       <div class="team-header">
         <h2 id="team1-name">Upper Basin</h2>
         <span class="team-badge">Team 1</span>
+        <div class="view-toggle-group" data-team="team1">
+          <button class="btn-view-icon active" data-view="bar" title="Bar chart">Bar</button>
+          <button class="btn-view-icon" data-view="spider" title="Spider chart">Spider</button>
+          <button class="btn-view-icon" data-view="table" title="Criteria table">Table</button>
+        </div>
       </div>
-      <div class="chart-wrap">
+      <div class="chart-wrap" id="team1-chart-wrap">
         <canvas id="team1-chart"></canvas>
       </div>
+      <div class="spider-wrap" id="team1-spider-wrap" hidden>
+        <canvas id="team1-spider"></canvas>
+      </div>
+      <div class="criteria-table-wrap" id="team1-criteria-table-wrap" hidden></div>
     </div>
 
     <!-- ② Combined (centre on large screens) -->
@@ -85,14 +94,23 @@
       <div class="combined-section">
         <div class="combined-header">
           <h3>Combined Ranking</h3>
-<div class="filter-row combined-filter">
-            <input id="combined-filter-selected" class="filter-checkbox" type="checkbox">
-            <label for="combined-filter-selected">Show selected alternatives only</label>
+          <div class="view-toggle-group" data-team="combined">
+            <button class="btn-view-icon active" data-view="bar" title="Bar chart">Bar</button>
+            <button class="btn-view-icon" data-view="spider" title="Spider chart">Spider</button>
+            <button class="btn-view-icon" data-view="table" title="Criteria table">Table</button>
           </div>
         </div>
-        <div class="chart-wrap chart-wrap-combined">
+        <div class="filter-row combined-filter">
+          <input id="combined-filter-selected" class="filter-checkbox" type="checkbox">
+          <label for="combined-filter-selected">Show selected alternatives only</label>
+        </div>
+        <div class="chart-wrap chart-wrap-combined" id="combined-chart-wrap">
           <canvas id="combined-chart"></canvas>
         </div>
+        <div class="spider-wrap" id="combined-spider-wrap" hidden>
+          <canvas id="combined-spider"></canvas>
+        </div>
+        <div class="criteria-table-wrap" id="combined-criteria-table-wrap" hidden></div>
       </div>
     </div>
 
@@ -101,10 +119,19 @@
       <div class="team-header">
         <h2 id="team2-name">Lower Basin</h2>
         <span class="team-badge">Team 2</span>
+        <div class="view-toggle-group" data-team="team2">
+          <button class="btn-view-icon active" data-view="bar" title="Bar chart">Bar</button>
+          <button class="btn-view-icon" data-view="spider" title="Spider chart">Spider</button>
+          <button class="btn-view-icon" data-view="table" title="Criteria table">Table</button>
+        </div>
       </div>
-      <div class="chart-wrap">
+      <div class="chart-wrap" id="team2-chart-wrap">
         <canvas id="team2-chart"></canvas>
       </div>
+      <div class="spider-wrap" id="team2-spider-wrap" hidden>
+        <canvas id="team2-spider"></canvas>
+      </div>
+      <div class="criteria-table-wrap" id="team2-criteria-table-wrap" hidden></div>
     </div>
 
     <!-- ④ Team 1 — criteria (bottom-left-1 on large screens) -->
@@ -198,6 +225,6 @@
     <option value="1">
   </datalist>
 
-  <script type="module" src="js/app.js"></script>
+  <script type="module" src="js/app.js?v=7"></script>
 </body>
 </html>

@@ -423,6 +423,7 @@ ul { list-style: none; }
 }
 .sync-dot.ok      { background: var(--ok); }
 .sync-dot.loading { background: var(--warn); animation: pulse 1s infinite; }
+.sync-dot.cached  { background: var(--warn); animation: pulse 2s infinite; }
 .sync-dot.error   { background: var(--error); }
 .sync-dot.offline { background: var(--text-dim); }
 
@@ -555,6 +556,89 @@ ul { list-style: none; }
 }
 .team1 .team-badge { background: var(--team1-glow); color: var(--team1); border: 1px solid var(--team1); }
 .team2 .team-badge { background: var(--team2-glow); color: var(--team2); border: 1px solid var(--team2); }
+
+.view-toggle-group {
+  margin-left: auto;
+  display: flex;
+  gap: 2px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.btn-view-icon {
+  background: transparent;
+  border: none;
+  padding: .2rem .3rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  font-size: .65rem;
+  font-family: var(--font-ui);
+  font-weight: 600;
+  opacity: .5;
+  transition: opacity var(--transition), background var(--transition);
+}
+.btn-view-icon img {
+  width: 18px;
+  height: 18px;
+  display: block;
+  filter: invert(1);
+}
+.btn-view-icon:hover { opacity: .7; background: var(--surface2); }
+.btn-view-icon.active { opacity: 1; background: var(--surface2); }
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Criteria-values heatmap table — compact block-cell design
+   Cells are pure color blocks; values shown in browser tooltip (title attr).
+   ────────────────────────────────────────────────────────────────────────── */
+.criteria-table-wrap { overflow-x: auto; }
+
+.criteria-values-table {
+  border-collapse: collapse;
+  font-family: var(--font-ui);
+  font-size: .62rem;
+  white-space: nowrap;
+}
+
+/* Header row */
+.criteria-values-table thead th {
+  background: var(--surface2);
+  color: var(--text-dim);
+  font-size: .58rem;
+  font-weight: 700;
+  text-align: center;
+  padding: .18rem .25rem;
+  border: 1px solid var(--border);
+  cursor: default;
+}
+
+/* ID column — all rows */
+.criteria-values-table .cvt-id {
+  color: var(--text-muted);
+  font-size: .62rem;
+  font-weight: 700;
+  padding: 0 .35rem 0 .2rem;
+  vertical-align: middle;
+  cursor: default;
+}
+
+/* Color-block data cells */
+.criteria-values-table .cvt-cell {
+  min-width: 3rem;
+  height: 1.4rem;
+  padding: 0 .25rem;
+  border: 1px solid rgba(0,0,0,0.2);
+  cursor: default;
+  font-size: .62rem;
+  font-family: var(--font-ui);
+  text-align: right;
+  color: #111;
+  white-space: nowrap;
+}
+
+.criteria-values-table tbody tr:hover .cvt-cell { filter: brightness(1.15); }
+.criteria-values-table .selected-alt .cvt-id { color: var(--text); }
 
 /* ──────────────────────────────────────────────────────────────────────────
    Section cards
@@ -794,6 +878,11 @@ ul { list-style: none; }
 /* ──────────────────────────────────────────────────────────────────────────
    Chart
    ────────────────────────────────────────────────────────────────────────── */
+.spider-wrap {
+  position: relative;
+  padding: .5rem 0;
+}
+
 .chart-wrap {
   position: relative;
   min-height: 80px; /* JS sets actual height based on bar count */
@@ -822,7 +911,7 @@ ul { list-style: none; }
   color: var(--combined);
 }
 .combined-filter {
-  margin-bottom: 0;
+  margin-bottom: .5rem;
   accent-color: var(--combined);
 }
 
