@@ -10,8 +10,6 @@
  */
 
 import { initMCDM, rankOrderWeights, runMethod, scoreToRank } from './mcdm.js';
-
-let _pyodideReady = false;
 import {
   parseAlternativesCSV,
   parseRankingsData,
@@ -26,6 +24,8 @@ import {
   deleteSnapshot,
   mergeSheetSnapshots
 } from './snapshots.js';
+
+let _pyodideReady = false;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // State

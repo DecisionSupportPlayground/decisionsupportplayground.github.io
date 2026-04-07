@@ -1,5 +1,5 @@
 /**
- * tests/answers.test.js
+ * tests/results_partial.test.js
  *
  * Validates TOPSIS and SAW against planning/answers.csv.
  *
@@ -33,9 +33,6 @@
  *   I10 Food Production Upstream    benefit   joint rank 4
  */
 
-// Prerequisites:
-//   npm install pyodide          (Node.js Pyodide runtime)
-//   network access to PyPI       (micropip installs pymcdm on first run)
 
 import { strict as assert } from 'node:assert';
 import { describe, it, before } from 'node:test';
@@ -137,7 +134,7 @@ describe('TOPSIS scores match answers.csv', () => {
 
 });
 
-// describe('TOPSIS rankings match answers.csv', () => {
+describe('TOPSIS rankings match answers.csv', () => {
 
   it('at p=0 (equal weights) — all alternatives match', () => {
     const ranks = scoreToRank(topsis(MATRIX, rankOrderWeights(RANKS, 0), TYPES));
@@ -177,6 +174,8 @@ describe('TOPSIS scores match answers.csv', () => {
     assert.strictEqual(ranks[7], 17, 'A11.2 should be rank 17');
     assert.strictEqual(ranks[8],  2, 'A12   should be rank 2');
   });
+
+});
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SAW
@@ -225,7 +224,7 @@ describe('SAW scores match answers.csv', () => {
 
 });
 
-// describe('SAW rankings match answers.csv', () => {
+describe('SAW rankings match answers.csv', () => {
 
   it('at p=0 (equal weights) — all alternatives match', () => {
     const ranks = scoreToRank(saw(MATRIX, rankOrderWeights(RANKS, 0), TYPES));
@@ -265,5 +264,7 @@ describe('SAW scores match answers.csv', () => {
     assert.strictEqual(ranks[7], 18, 'A11.2 should be rank 18');
     assert.strictEqual(ranks[8],  2, 'A12   should be rank 2');
   });
+
+});
 
 

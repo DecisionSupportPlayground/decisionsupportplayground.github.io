@@ -1,11 +1,11 @@
 /**
- * tests/mcam.test.js
+ * tests/results_full.test.js
  *
  * Validates TOPSIS and SAW against planning/MCAM_results.csv.
  *
  * The CSV was produced by pymcdm and contains two result sets:
  *
- *   Left columns  — 9-alternative subset (A{1}–A{9}, same as answers.test.js)
+ *   Left columns  — 9-alternative subset (A{1}–A{9}, same as results_partial.test.js)
  *   Right columns — all 22 alternatives  (A{1}–A{22})
  *
  * This file tests the full 22-alternative run.  Scores are checked to ±0.02
@@ -187,7 +187,7 @@ describe('TOPSIS scores — all 22 alternatives — match MCAM_results.csv', () 
 
 });
 
-// describe('TOPSIS rankings — all 22 alternatives — match MCAM_results.csv', () => {
+describe('TOPSIS rankings — all 22 alternatives — match MCAM_results.csv', () => {
 
   it('at p=0 (equal weights)', () => {
     const ranks = scoreToRank(topsis(MATRIX, rankOrderWeights(RANKS, 0), TYPES));
@@ -267,7 +267,7 @@ describe('TOPSIS scores — all 22 alternatives — match MCAM_results.csv', () 
     assert.strictEqual(ranks[21],  8, 'A13   should be rank 8');
   });
 
-// });
+});
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SAW — all 22 alternatives
@@ -355,7 +355,7 @@ describe('SAW scores — all 22 alternatives — match MCAM_results.csv', () => 
 
 });
 
-// describe('SAW rankings — all 22 alternatives — match MCAM_results.csv', () => {
+describe('SAW rankings — all 22 alternatives — match MCAM_results.csv', () => {
 
   it('at p=0 (equal weights)', () => {
     const ranks = scoreToRank(saw(MATRIX, rankOrderWeights(RANKS, 0), TYPES));
@@ -435,3 +435,4 @@ describe('SAW scores — all 22 alternatives — match MCAM_results.csv', () => 
     assert.strictEqual(ranks[21], 12, 'A13   should be rank 12');
   });
 
+});

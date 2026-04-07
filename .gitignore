@@ -2,3 +2,8 @@
 .vscode
 img
 planning
+node_modules
+vendor/pyodide
+vendor/pymcdm/__pycache__
+vendor/pymcdm/methods/__pycache__
+vendor/pymcdm/io/__pycache__

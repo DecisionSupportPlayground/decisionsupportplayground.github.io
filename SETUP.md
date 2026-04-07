@@ -130,7 +130,7 @@ Pyodide and pymcdm load from the internet on first use (~5–10 s, same as the G
 
 ```bash
 npm install pyodide    # once — Node.js Pyodide runtime for tests
-npm test               # requires internet access (micropip fetches pymcdm from PyPI)
+npm test
 ```
 
 Tests validate TOPSIS and SAW scores against the reference answers in `planning/answers.csv`.

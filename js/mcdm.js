@@ -22,11 +22,9 @@
  * inside Pyodide (WebAssembly).  The pure-JS helpers rankOrderWeights and
  * scoreToRank are not in pymcdm and remain as JS.
  *
- * Browser setup: run scripts/setup.sh once to populate vendor/pyodide/ and
- * vendor/wheels/.  The HTML must load pyodide.js before this module:
- *   <script src="vendor/pyodide/pyodide.js"></script>
+ * Browser setup: app.html loads pyodide.js from CDN before this module.
  *
- * Node.js / test setup: npm install pyodide  (pymcdm is fetched from PyPI).
+ * Node.js / test setup: npm install pyodide
  */
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -199,35 +197,3 @@ export function scoreToRank(scores) {
   return scores.map(s => sorted.indexOf(s) + 1);
 }
 
-// ── Legacy normalisation exports (kept for any external callers) ──────────────
-
-export function minMaxNormalize(matrix, types) {
-  const m = matrix.length;
-  const n = types.length;
-  const result = Array.from({ length: m }, () => new Array(n).fill(0));
-  for (let j = 0; j < n; j++) {
-    const col = matrix.map(row => row[j]);
-    const minVal = Math.min(...col);
-    const maxVal = Math.max(...col);
-    const range = maxVal - minVal;
-    for (let i = 0; i < m; i++) {
-      if (range === 0) { result[i][j] = 0; }
-      else if (types[j] === 1) { result[i][j] = (matrix[i][j] - minVal) / range; }
-      else { result[i][j] = (maxVal - matrix[i][j]) / range; }
-    }
-  }
-  return result;
-}
-
-export function vectorNormalize(matrix) {
-  const m = matrix.length;
-  const n = matrix[0].length;
-  const result = Array.from({ length: m }, () => new Array(n).fill(0));
-  for (let j = 0; j < n; j++) {
-    const magnitude = Math.sqrt(matrix.map(row => row[j] ** 2).reduce((a, b) => a + b, 0));
-    for (let i = 0; i < m; i++) {
-      result[i][j] = magnitude === 0 ? 0 : matrix[i][j] / magnitude;
-    }
-  }
-  return result;
-}

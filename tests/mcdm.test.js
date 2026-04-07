@@ -21,8 +21,6 @@ import { describe, it, before } from 'node:test';
 import {
   initMCDM,
   rankOrderWeights,
-  minMaxNormalize,
-  vectorNormalize,
   saw,
   topsis,
   mabac,
@@ -83,47 +81,6 @@ describe('rankOrderWeights', () => {
 
   it('returns empty array for empty input', () => {
     assert.deepStrictEqual(rankOrderWeights([], 1), []);
-  });
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-// minMaxNormalize
-// ─────────────────────────────────────────────────────────────────────────────
-
-describe('minMaxNormalize', () => {
-  it('benefit column: min value maps to 0, max to 1', () => {
-    const norm = minMaxNormalize(MATRIX, TYPES);
-    // I1 is benefit; A1 has min(2.5), A3 has max(4)
-    assert.ok(Math.abs(norm[0][0] - 0) < 1e-10, 'A1 I1 should be 0');
-    assert.ok(Math.abs(norm[2][0] - 1) < 1e-10, 'A3 I1 should be 1');
-  });
-
-  it('cost column: max value maps to 0, min to 1', () => {
-    const norm = minMaxNormalize(MATRIX, TYPES);
-    // I2 is cost; A3 has max cost(80) → normalised 0; A1 has min cost(50) → 1
-    assert.ok(Math.abs(norm[2][1] - 0) < 1e-10, 'A3 I2 (max cost) should be 0');
-    assert.ok(Math.abs(norm[0][1] - 1) < 1e-10, 'A1 I2 (min cost) should be 1');
-  });
-
-  it('all-equal column maps to 0 (no discriminating power)', () => {
-    const m    = [[1, 5], [2, 5], [3, 5]];
-    const norm = minMaxNormalize(m, [1, 1]);
-    norm.forEach(row => assert.strictEqual(row[1], 0));
-  });
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-// vectorNormalize
-// ─────────────────────────────────────────────────────────────────────────────
-
-describe('vectorNormalize', () => {
-  it('each column has unit Euclidean norm after normalisation', () => {
-    const norm = vectorNormalize(MATRIX);
-    const n    = MATRIX[0].length;
-    for (let j = 0; j < n; j++) {
-      const sumSq = norm.reduce((s, row) => s + row[j] ** 2, 0);
-      assert.ok(Math.abs(sumSq - 1) < 1e-9, `Column ${j} sum-of-squares = ${sumSq}`);
-    }
   });
 });
 
