@@ -8,7 +8,10 @@
  *   - Downloading the Apps Script template file
  */
 
+import { initTheme } from './theme.js';
+
 document.addEventListener('DOMContentLoaded', () => {
+  initTheme(); // no re-render callback needed on the landing page
   // Show error banner if redirected here with ?error=
   const params = new URLSearchParams(window.location.search);
   if (params.get('error') === 'no_url') {

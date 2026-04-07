@@ -63,6 +63,26 @@
 }
 
 /* ──────────────────────────────────────────────────────────────────────────
+   Light theme overrides
+   ────────────────────────────────────────────────────────────────────────── */
+[data-theme="light"] {
+  --bg:         #f0f4fa;
+  --surface:    #ffffff;
+  --surface2:   #e4ecf5;
+  --border:     rgba(46, 160, 237, 0.25);
+
+  --text:       #0c111e;
+  --text-muted: #3a5a7a;
+  --text-dim:   #7a9ab8;
+
+  --shadow:     0 4px 20px rgba(0,0,0,0.12);
+  --team1-glow:  rgba(46,160,237,0.08);
+  --team2-glow:  rgba(58,191,143,0.08);
+  --combined-glow: rgba(245,158,11,0.08);
+  --ihe-blue-glow: rgba(46,160,237,0.08);
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
    Reset / base
    ────────────────────────────────────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -143,6 +163,27 @@ ul { list-style: none; }
   transition: color var(--transition), background var(--transition);
 }
 .btn-icon:hover { color: var(--error); background: #ef444420; }
+
+.btn-icon-sm {
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: .2rem .5rem;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: color var(--transition), background var(--transition);
+  flex-shrink: 0;
+}
+.btn-icon-sm:hover { color: var(--text); background: var(--surface2); }
+
+/* Landing page theme toggle — fixed top-right corner */
+.theme-toggle-landing {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  z-index: 100;
+}
 
 /* ──────────────────────────────────────────────────────────────────────────
    Banner (landing page)

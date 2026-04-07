@@ -10,6 +10,7 @@
  */
 
 import { initMCDM, rankOrderWeights, runMethod, scoreToRank } from './mcdm.js';
+import { initTheme } from './theme.js';
 import {
   parseAlternativesCSV,
   parseRankingsData,
@@ -26,6 +27,7 @@ import {
 } from './snapshots.js';
 
 let _pyodideReady = false;
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // State
@@ -79,6 +81,7 @@ document.addEventListener('DOMContentLoaded', () => {
   state.snapshots = loadLocalSnapshots();
 
   wireGlobalButtons();
+  initTheme(() => renderAllPanels());
   renderAllPanels();
 
   // Start Pyodide + pymcdm loading in parallel with the sheet data fetch.
