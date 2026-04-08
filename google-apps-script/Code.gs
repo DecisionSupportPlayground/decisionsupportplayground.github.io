@@ -32,6 +32,7 @@
 var TAB_ALTERNATIVES = 'Alternatives';
 var TAB_RANKINGS     = 'Rankings';
 var TAB_SNAPSHOTS    = 'Snapshots';
+var TAB_EVENTS       = 'Events';
 var TAB_META         = '_meta';
 
 // ─── Rankings tab column layout ──────────────────────────────────────────────
@@ -93,6 +94,10 @@ function doPost(e) {
 
       case 'deleteSnapshot':
         _deleteSnapshot(payload.id);
+        return _json({ ok: true });
+
+      case 'logEvent':
+        _logEvent(payload.event, payload.team, payload.properties);
         return _json({ ok: true });
 
       default:
@@ -212,6 +217,30 @@ function _deleteSnapshot(id) {
   }
 
   _touchLastModified();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Events
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Events tab layout:
+ *   Col A: timestamp   (ISO string)
+ *   Col B: event       (e.g. "algorithm_changed")
+ *   Col C: team        (e.g. "team1")
+ *   Col D: properties  (JSON blob of event-specific data)
+ */
+function _logEvent(event, team, properties) {
+  var sheet = _getOrCreateSheet(TAB_EVENTS);
+  if (sheet.getLastRow() === 0) {
+    sheet.appendRow(['timestamp', 'event', 'team', 'properties']);
+  }
+  sheet.appendRow([
+    new Date().toISOString(),
+    event      || '',
+    team       || '',
+    JSON.stringify(properties || {})
+  ]);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -341,6 +370,12 @@ function initializeSheets() {
   var snapSheet = _getOrCreateSheet(TAB_SNAPSHOTS);
   if (snapSheet.getLastRow() === 0) {
     snapSheet.appendRow(['id','name','timestamp','state']);
+  }
+
+  // ── Events tab ───────────────────────────────────────────────────────────
+  var eventsSheet = _getOrCreateSheet(TAB_EVENTS);
+  if (eventsSheet.getLastRow() === 0) {
+    eventsSheet.appendRow(['timestamp','event','team','properties']);
   }
 
   _touchLastModified();

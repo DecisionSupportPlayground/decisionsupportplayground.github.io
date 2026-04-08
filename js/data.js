@@ -349,6 +349,24 @@ export async function saveSnapshotToSheet(scriptUrl, snapshot) {
 }
 
 /**
+ * Log a user interaction event to the Events sheet — fire-and-forget.
+ * Silently no-ops when scriptUrl is absent (local CSV mode).
+ *
+ * @param {string} scriptUrl
+ * @param {string} event       e.g. 'algorithm_changed'
+ * @param {string} team        e.g. 'team1'
+ * @param {object} [properties]  event-specific data
+ */
+export function logEvent(scriptUrl, event, team, properties = {}) {
+  if (!scriptUrl) return;
+  fetch(scriptUrl, {
+    method:  'POST',
+    headers: { 'Content-Type': 'text/plain' },
+    body:    JSON.stringify({ action: 'logEvent', event, team, properties })
+  }).catch(() => {}); // never block the UI
+}
+
+/**
  * Delete a snapshot from the sheet.
  *
  * @param {string} scriptUrl

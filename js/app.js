@@ -17,7 +17,8 @@ import {
   parseSnapshotsData,
   fetchSheetData,
   fetchLastModified,
-  saveRankingToSheet
+  saveRankingToSheet,
+  logEvent
 } from './data.js';
 import {
   loadLocalSnapshots,
@@ -180,7 +181,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   fetchSheetData(scriptUrl)
-    .then(data => { _saveCache(data); applySheetData(data); })
+    .then(data => { _saveCache(data); applySheetData(data); logEvent(scriptUrl, 'session_start', null); })
     .catch(err => {
       if (cached) {
         setStatus('cached', 'Sheet unreachable — showing cached data');
@@ -406,6 +407,7 @@ function renderCriteriaList(teamId) {
       const newOrder = [...listEl.querySelectorAll('.criterion-item')].map(el => el.dataset.id);
       state.teams[teamId].criteriaOrder = newOrder;
       state.teams[teamId].isDirty = true;
+      logEvent(state.scriptUrl, 'criteria_reordered', teamId, { newOrder });
       recompute(teamId);
       // Full re-render to update rank numbers and weights
       renderCriteriaList(teamId);
@@ -1111,6 +1113,9 @@ function wireGlobalButtons() {
     updatePLabel(state.p);
     _onSharedSettingChanged();
   });
+  sharedSlider?.addEventListener('change', () => {
+    logEvent(state.scriptUrl, 'p_value_changed', null, { p: state.p });
+  });
 
   // Shared method tabs — affects both teams
   document.querySelectorAll('#shared-method-tabs .method-tab').forEach(btn => {
@@ -1119,6 +1124,7 @@ function wireGlobalButtons() {
       document.querySelectorAll('#shared-method-tabs .method-tab').forEach(b =>
         b.classList.toggle('active', b === btn)
       );
+      logEvent(state.scriptUrl, 'algorithm_changed', null, { method: state.method });
       _onSharedSettingChanged();
     });
   });
@@ -1132,6 +1138,7 @@ function wireGlobalButtons() {
     const teamId = group.dataset.team;
     const view   = btn.dataset.view;
     group.querySelectorAll('.btn-view-icon').forEach(b => b.classList.toggle('active', b === btn));
+    logEvent(state.scriptUrl, 'view_changed', teamId, { view });
     if (teamId === 'combined') {
       const chartWrap  = document.getElementById('combined-chart-wrap');
       const spiderWrap = document.getElementById('combined-spider-wrap');
@@ -1178,6 +1185,7 @@ function wireGlobalButtons() {
         state.teams[teamId].selections = sels.filter(a => a !== alt);
       }
       state.teams[teamId].isDirty = true;
+      logEvent(state.scriptUrl, 'selection_changed', teamId, { selectedCount: state.teams[teamId].selections.length });
       recompute(teamId);   // recomputes both full and selectedResults
       renderResults(teamId);
       for (const id of TEAMS) { renderChart(id); renderCriteriaTable(id); renderSpiderChart(id); }
@@ -1193,6 +1201,7 @@ function wireGlobalButtons() {
     const name = prompt('Snapshot name:', `Snapshot ${new Date().toLocaleTimeString()}`);
     if (name === null) return; // cancelled
     const snap = await saveSnapshot(name, _captureState(), state.scriptUrl);
+    logEvent(state.scriptUrl, 'snapshot_saved', null, { name });
     state.snapshots = loadLocalSnapshots();
     state.activeSnapshot = snap;
     renderSnapshotsList();
@@ -1209,6 +1218,7 @@ function wireGlobalButtons() {
       if (!snap) return;
       if (!confirm(`Load snapshot "${snap.name}"? Unsaved changes will be lost.`)) return;
       _restoreState(snap.state);
+      logEvent(state.scriptUrl, 'snapshot_loaded', null, { name: snap.name });
       state.activeSnapshot = snap;
       recomputeAll();
       renderAllPanels();
