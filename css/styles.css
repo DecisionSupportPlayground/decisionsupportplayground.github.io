@@ -720,6 +720,15 @@ ul { list-style: none; }
   padding: .55rem 1rem;
   border-bottom: 1px solid var(--border);
   background: var(--surface2);
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+}
+/* Override text-transform/letter-spacing inside the popover */
+.section-title .method-info-panel {
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 400;
 }
 
 /* Team-colored section titles in the criteria and results columns */
@@ -807,6 +816,70 @@ ul { list-style: none; }
   margin-bottom: .35rem;
   text-transform: uppercase;
   letter-spacing: .06em;
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+}
+
+/* ── Method info popover ─────────────────────────────────────────────────── */
+.method-info {
+  display: inline-block;
+  position: relative;
+}
+.method-info-icon {
+  list-style: none;
+  cursor: pointer;
+  font-size: .8rem;
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  width: 1.1rem;
+  height: 1.1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color var(--transition), border-color var(--transition);
+  font-style: normal;
+  font-weight: 700;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.method-info-icon::-webkit-details-marker { display: none; }
+.method-info[open] .method-info-icon,
+.method-info-icon:hover {
+  color: var(--ihe-blue);
+  border-color: var(--ihe-blue);
+}
+.method-info-panel {
+  position: fixed;
+  z-index: 1000;
+  width: 22rem;
+  max-width: calc(100vw - 2rem);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: .85rem 1rem;
+  box-shadow: var(--shadow);
+  font-size: .78rem;
+  color: var(--text);
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 400;
+}
+.method-info-panel p + p { margin-top: .6rem; }
+.method-info-panel p.hint { color: var(--text-muted); }
+.method-info-panel dl { margin: 0; }
+.method-info-panel dt {
+  font-family: var(--font-ui);
+  font-weight: 700;
+  color: var(--ihe-blue);
+  margin-top: .55rem;
+}
+.method-info-panel dt:first-child { margin-top: 0; }
+.method-info-panel dd {
+  margin: .15rem 0 0 0;
+  color: var(--text-muted);
+  line-height: 1.5;
 }
 
 /* p-slider — used only in shared settings; thumb styled via .shared-slider override below */

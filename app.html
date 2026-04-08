@@ -34,7 +34,23 @@
   <div class="shared-settings">
     <div class="shared-settings-inner">
       <div class="shared-setting-block">
-        <div class="setting-label">Weight Exponent (p) — applies to both teams</div>
+        <div class="setting-label">
+          Weight Exponent (p)
+          <details class="method-info">
+            <summary class="method-info-icon" title="About the weight exponent">ℹ</summary>
+            <div class="method-info-panel">
+              <p style="margin:0 0 .5rem">Controls how strongly criteria priority order affects weights: <em>w<sub>i</sub> = (n − r<sub>i</sub> + 1)<sup>p</sup> / Σ(n − r<sub>j</sub> + 1)<sup>p</sup></em></p>
+              <dl>
+                <dt>p = 0 — Equal weights</dt>
+                <dd>All criteria weighted equally; priority order ignored.</dd>
+                <dt>p = 0.5 — Moderate priority</dt>
+                <dd>Weights decay gradually; top criteria somewhat favoured.</dd>
+                <dt>p = 1 — Linear priority</dt>
+                <dd>Weights decrease linearly with rank.</dd>
+              </dl>
+            </div>
+          </details>
+        </div>
         <div class="p-slider-wrap">
           <input id="shared-p-slider" class="p-slider shared-slider"
                  type="range" min="0" max="1" step="0.5" value="0"
@@ -48,7 +64,24 @@
         <div id="shared-p-label" class="p-value-label">Equal weights (p = 0)</div>
       </div>
       <div class="shared-setting-block">
-        <div class="setting-label">MCDM Method — applies to both teams</div>
+        <div class="setting-label">
+          MCDM Method
+          <details class="method-info">
+            <summary class="method-info-icon" title="About these methods">ℹ</summary>
+            <div class="method-info-panel">
+              <dl>
+                <dt>TOPSIS</dt>
+                <dd>Technique for Order of Preference by Similarity to Ideal Solution. Ranks alternatives by their distance to an ideal best and worst solution using vector normalisation.</dd>
+                <dt>SAW</dt>
+                <dd>Simple Additive Weighting (Weighted Sum Model). Scores each alternative as the weighted sum of its normalised criterion values. Intuitive and transparent.</dd>
+                <dt>MABAC</dt>
+                <dd>Multi-Attributive Border Approximation Area Comparison. Scores alternatives by how far their weighted values lie above or below a geometric-mean border solution.</dd>
+                <dt>ARAS</dt>
+                <dd>Additive Ratio Assessment. Compares each alternative against an ideal optimum row; the score is the ratio of the alternative's utility to the optimum utility.</dd>
+              </dl>
+            </div>
+          </details>
+        </div>
         <div class="method-tabs" id="shared-method-tabs">
           <button class="method-tab active" data-method="topsis">TOPSIS</button>
           <button class="method-tab"        data-method="saw">SAW</button>
@@ -139,7 +172,17 @@
     <!-- ④ Team 1 — criteria (bottom-left-1 on large screens) -->
     <div class="team-col team1" id="team1-criteria-col">
       <section class="panel-section">
-        <div class="section-title">Criteria Priority — drag to reorder</div>
+        <div class="section-title">
+          Criteria Priority
+          <details class="method-info">
+            <summary class="method-info-icon" title="About criteria priority">?</summary>
+            <div class="method-info-panel">
+              <p>Drag criteria up or down to reflect what matters most to your community. Rank 1 carries the most weight.</p>
+              <p>Priority only affects the results if you set the Weight Exponent above zero — at p = 0 all criteria are equal regardless of order.</p>
+              <p class="hint">Consider criteria that represent long-term or irreversible consequences — environmental degradation and ecosystem loss often unfold slowly but cannot easily be undone. Also consider whose voices may not be fully represented in the data: downstream communities, future generations, or groups with less political influence.</p>
+            </div>
+          </details>
+        </div>
         <div class="section-body" style="padding:.5rem;">
           <ul id="team1-criteria-list" class="criteria-list"></ul>
           <button id="team1-save-btn" class="btn-save-ranking" style="margin-top:.5rem;">Save Ranking</button>
@@ -150,7 +193,16 @@
     <!-- ⑤ Team 1 — results (bottom-left-2 on large screens) -->
     <div class="team-col team1" id="team1-results-col">
       <section class="panel-section">
-        <div class="section-title">Ranked Alternatives</div>
+        <div class="section-title">
+          Ranked Alternatives
+          <details class="method-info">
+            <summary class="method-info-icon" title="About ranked alternatives">?</summary>
+            <div class="method-info-panel">
+              <p>Use ★ to narrow a long list of alternatives down to the ones your team will actually consider. Checking <em>Calculate selected only</em> re-ranks just those, so scores reflect your shortlist rather than the full set.</p>
+              <p class="hint">Before finalising, re-examine the full list rankings to make sure you haven't overlooked an option that better serves your goals.</p>
+            </div>
+          </details>
+        </div>
         <div class="section-body">
           <div class="filter-row">
             <input id="team1-calc-selected" class="calc-selected-checkbox"
@@ -176,7 +228,17 @@
     <!-- ⑥ Team 2 — criteria (bottom-right-1 on large screens) -->
     <div class="team-col team2" id="team2-criteria-col">
       <section class="panel-section">
-        <div class="section-title">Criteria Priority — drag to reorder</div>
+        <div class="section-title">
+          Criteria Priority
+          <details class="method-info">
+            <summary class="method-info-icon" title="About criteria priority">?</summary>
+            <div class="method-info-panel">
+              <p>Drag criteria up or down to reflect what matters most to your community. Rank 1 carries the most weight.</p>
+              <p>Priority only affects the results if you set the Weight Exponent above zero — at p = 0 all criteria are equal regardless of order.</p>
+              <p class="hint">Consider criteria that represent long-term or irreversible consequences — environmental degradation and ecosystem loss often unfold slowly but cannot easily be undone. Also consider whose voices may not be fully represented in the data: downstream communities, future generations, or groups with less political influence.</p>
+            </div>
+          </details>
+        </div>
         <div class="section-body" style="padding:.5rem;">
           <ul id="team2-criteria-list" class="criteria-list"></ul>
           <button id="team2-save-btn" class="btn-save-ranking" style="margin-top:.5rem;">Save Ranking</button>
@@ -187,7 +249,16 @@
     <!-- ⑦ Team 2 — results (bottom-right-2 on large screens) -->
     <div class="team-col team2" id="team2-results-col">
       <section class="panel-section">
-        <div class="section-title">Ranked Alternatives</div>
+        <div class="section-title">
+          Ranked Alternatives
+          <details class="method-info">
+            <summary class="method-info-icon" title="About ranked alternatives">?</summary>
+            <div class="method-info-panel">
+              <p>Use ★ to narrow a long list of alternatives down to the ones your team will actually consider. Checking <em>Calculate selected only</em> re-ranks just those, so scores reflect your shortlist rather than the full set.</p>
+              <p class="hint">Before finalising, re-examine the full list rankings to make sure you haven't overlooked an option that better serves your goals.</p>
+            </div>
+          </details>
+        </div>
         <div class="section-body">
           <div class="filter-row">
             <input id="team2-calc-selected" class="calc-selected-checkbox"

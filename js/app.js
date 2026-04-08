@@ -84,6 +84,30 @@ document.addEventListener('DOMContentLoaded', () => {
   initTheme(() => renderAllPanels());
   renderAllPanels();
 
+  // Position and close .method-info popovers
+  document.addEventListener('click', e => {
+    const details = e.target.closest('.method-info');
+    // Close all others regardless of where the click landed
+    document.querySelectorAll('.method-info[open]').forEach(d => {
+      if (d !== details) d.removeAttribute('open');
+    });
+    if (!details) return;
+    // Position the panel just below the summary icon, clamped to viewport
+    requestAnimationFrame(() => {
+      if (!details.open) return;
+      const icon  = details.querySelector('.method-info-icon');
+      const panel = details.querySelector('.method-info-panel');
+      if (!icon || !panel) return;
+      const r = icon.getBoundingClientRect();
+      const panelW = panel.offsetWidth || 352;
+      let left = r.left;
+      if (left + panelW > window.innerWidth - 16) left = window.innerWidth - panelW - 16;
+      if (left < 8) left = 8;
+      panel.style.top  = `${r.bottom + 6}px`;
+      panel.style.left = `${left}px`;
+    });
+  });
+
   // Start Pyodide + pymcdm loading in parallel with the sheet data fetch.
   // Both take ~5-10 s; the user waits for whichever finishes last, not both.
   setStatus('loading', 'Loading MCDM engine…');
@@ -392,19 +416,30 @@ function renderResults(teamId) {
   const tbody   = document.getElementById(`${teamId}-results-body`);
   if (!tbody) return;
 
-  tbody.innerHTML = results.map(r => `
+  const calcEl   = document.getElementById(`${teamId}-calc-selected`);
+  const combinedCalcEl = document.getElementById('combined-calc-selected');
+  const calcOnly = (calcEl?.checked || combinedCalcEl?.checked) && state.selectedResults[teamId].length > 0;
+
+  // Build a lookup of recalculated rank/score for selected alts
+  const selMap = new Map(state.selectedResults[teamId].map(r => [r.id, r]));
+
+  tbody.innerHTML = results.map(r => {
+    const sel = calcOnly ? selMap.get(r.id) : null;
+    const rank  = sel ? sel.rank  : (calcOnly ? '—' : r.rank);
+    const score = sel ? sel.score.toFixed(3) : (calcOnly ? '—' : r.score.toFixed(3));
+    return `
     <tr class="${r.isSelected ? 'selected-alt' : ''}">
-      <td class="rank-cell">${r.rank}</td>
+      <td class="rank-cell">${rank}</td>
       <td class="id-cell">${escHtml(r.id)}</td>
       <td class="desc-cell">${escHtml(r.description)}</td>
-      <td class="score-cell">${r.score.toFixed(3)}</td>
+      <td class="score-cell">${score}</td>
       <td class="sel-cell">
         <input type="checkbox" class="alt-checkbox"
                data-team="${teamId}" data-alt="${escHtml(r.id)}"
                ${r.isSelected ? 'checked' : ''}>
       </td>
-    </tr>
-  `).join('');
+    </tr>`;
+  }).join('');
 }
 
 function renderChart(teamId) {
@@ -1095,8 +1130,7 @@ function wireGlobalButtons() {
   document.addEventListener('change', e => {
     if (e.target.classList.contains('calc-selected-checkbox')) {
       // Switching the checkbox just changes which results are displayed — no recompute needed.
-      // renderResults is intentionally excluded: the ranked-alternatives list always shows the full set.
-      for (const teamId of TEAMS) { renderChart(teamId); renderCriteriaTable(teamId); renderSpiderChart(teamId); }
+      for (const teamId of TEAMS) { renderResults(teamId); renderChart(teamId); renderCriteriaTable(teamId); renderSpiderChart(teamId); }
       renderCombinedChart();
       renderCombinedSpiderChart();
       renderCombinedTable();
