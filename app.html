@@ -160,6 +160,10 @@
           <input id="combined-calc-selected" class="calc-selected-checkbox" type="checkbox">
           <label for="combined-calc-selected">Calculate selected alternatives only</label>
         </div>
+        <div class="filter-row combined-filter">
+          <input id="combined-calc-criteria" class="calc-criteria-checkbox" type="checkbox" data-team="combined">
+          <label for="combined-calc-criteria">Calculate selected criteria only</label>
+        </div>
         <div class="chart-wrap chart-wrap-combined" id="combined-chart-wrap">
           <canvas id="combined-chart"></canvas>
         </div>
@@ -206,6 +210,10 @@
         </div>
         <div class="section-body" style="padding:.5rem;">
           <ul id="team1-criteria-list" class="criteria-list"></ul>
+          <div class="filter-row" style="margin-top:.4rem;">
+            <input id="team1-calc-criteria" class="calc-criteria-checkbox" type="checkbox" data-team="team1">
+            <label for="team1-calc-criteria">Calculate selected criteria only</label>
+          </div>
           <button id="team1-save-btn" class="btn-save-ranking" style="margin-top:.5rem;">Save Ranking</button>
         </div>
       </section>
@@ -262,6 +270,10 @@
         </div>
         <div class="section-body" style="padding:.5rem;">
           <ul id="team2-criteria-list" class="criteria-list"></ul>
+          <div class="filter-row" style="margin-top:.4rem;">
+            <input id="team2-calc-criteria" class="calc-criteria-checkbox" type="checkbox" data-team="team2">
+            <label for="team2-calc-criteria">Calculate selected criteria only</label>
+          </div>
           <button id="team2-save-btn" class="btn-save-ranking" style="margin-top:.5rem;">Save Ranking</button>
         </div>
       </section>

@@ -38,11 +38,12 @@ const TEAMS     = ['team1', 'team2'];
 const CACHE_KEY = 'madm_sheet_cache';
 
 const DEFAULT_TEAM = {
-  criteriaOrder: [], // ['I1','I2',...] — index 0 = rank 1 (highest priority)
-  selections:    [], // ['A1','A4',...] — selected alternatives
-  lastUpdated:   null,
-  isDirty:       false, // unsaved local changes
-  isSaving:      false
+  criteriaOrder:      [], // ['I1','I2',...] — index 0 = rank 1 (highest priority)
+  criteriaSelections: [], // ['I1','I2',...] — subset to include; empty = all included
+  selections:         [], // ['A1','A4',...] — selected alternatives
+  lastUpdated:        null,
+  isDirty:            false, // unsaved local changes
+  isSaving:           false
 };
 
 const state = {
@@ -55,8 +56,10 @@ const state = {
     team1: { ...DEFAULT_TEAM, name: 'Upper Basin' },
     team2: { ...DEFAULT_TEAM, name: 'Lower Basin' }
   },
-  results:         { team1: [], team2: [] },
-  selectedResults: { team1: [], team2: [] }, // recalculated using selected alts only
+  results:                       { team1: [], team2: [] },
+  selectedResults:               { team1: [], team2: [] }, // recalculated using selected alts only
+  criteriaFilteredResults:       { team1: [], team2: [] }, // recalculated using selected criteria only
+  criteriaFilteredSelResults:    { team1: [], team2: [] }, // both filters applied
   snapshots:       [],
   activeSnapshot:  null,
   lastModified:    null,
@@ -270,12 +273,12 @@ function recomputeAll() {
   recompute('team2');
 }
 
-function _computeResults(alts, teamId) {
+function _computeResults(alts, teamId, criteriaOrderOverride = null) {
   const team = state.teams[teamId];
   const { criteria } = state;
 
   // Build ordered criteria list (skip any IDs not in current criteria set)
-  const orderedCriteria = team.criteriaOrder
+  const orderedCriteria = (criteriaOrderOverride ?? team.criteriaOrder)
     .map(id => criteria.find(c => c.id === id))
     .filter(Boolean);
 
@@ -316,8 +319,10 @@ function recompute(teamId) {
   const { criteria, alternatives } = state;
 
   if (!alternatives.length || !criteria.length || !team.criteriaOrder.length || !_pyodideReady) {
-    state.results[teamId] = [];
-    state.selectedResults[teamId] = [];
+    state.results[teamId]                    = [];
+    state.selectedResults[teamId]            = [];
+    state.criteriaFilteredResults[teamId]    = [];
+    state.criteriaFilteredSelResults[teamId] = [];
     return;
   }
 
@@ -327,13 +332,53 @@ function recompute(teamId) {
   state.selectedResults[teamId] = selectedAlts.length > 0
     ? _computeResults(selectedAlts, teamId)
     : [];
+
+  // Criteria-filtered results (only when a real subset is selected)
+  const filteredOrder = team.criteriaSelections.length > 0
+    ? team.criteriaOrder.filter(id => team.criteriaSelections.includes(id))
+    : team.criteriaOrder;
+  const isFiltered = filteredOrder.length < team.criteriaOrder.length;
+
+  state.criteriaFilteredResults[teamId] = isFiltered
+    ? _computeResults(alternatives, teamId, filteredOrder)
+    : state.results[teamId];
+
+  state.criteriaFilteredSelResults[teamId] = isFiltered && selectedAlts.length > 0
+    ? _computeResults(selectedAlts, teamId, filteredOrder)
+    : state.selectedResults[teamId];
 }
 
-/** Returns selectedResults when any relevant "calc selected only" checkbox is checked, else full results. */
-function _activeResults(teamId) {
-  const calcEl         = document.getElementById(`${teamId}-calc-selected`);
-  const combinedCalcEl = document.getElementById('combined-calc-selected');
-  if ((calcEl?.checked || combinedCalcEl?.checked) && state.selectedResults[teamId].length > 0) {
+/** Returns the active criteria order for a team — filtered when "calc criteria" is on.
+ *  Pass checkCombined=true from combined renders so the combined-calc-criteria checkbox is also honoured. */
+function _activeCriteriaOrder(teamId, checkCombined = false) {
+  const team          = state.teams[teamId];
+  const filterEl      = document.getElementById(`${teamId}-calc-criteria`);
+  const combinedEl    = checkCombined ? document.getElementById('combined-calc-criteria') : null;
+  if ((filterEl?.checked || combinedEl?.checked) && team.criteriaSelections.length > 0) {
+    return team.criteriaOrder.filter(id => team.criteriaSelections.includes(id));
+  }
+  return team.criteriaOrder;
+}
+
+/** Returns the appropriate results array based on which filter checkboxes are active.
+ *  Pass checkCombined=true from combined renders so combined-level checkboxes are also honoured. */
+function _activeResults(teamId, checkCombined = false) {
+  const calcAltEl     = document.getElementById(`${teamId}-calc-selected`);
+  const combinedAltEl = document.getElementById('combined-calc-selected');
+  const calcCritEl    = document.getElementById(`${teamId}-calc-criteria`);
+  const combinedCritEl = checkCombined ? document.getElementById('combined-calc-criteria') : null;
+
+  const useAlt  = (calcAltEl?.checked || combinedAltEl?.checked);
+  const useCrit = (calcCritEl?.checked || combinedCritEl?.checked) &&
+                  state.teams[teamId].criteriaSelections.length > 0;
+
+  if (useCrit && useAlt && state.criteriaFilteredSelResults[teamId]?.length > 0) {
+    return state.criteriaFilteredSelResults[teamId];
+  }
+  if (useCrit && state.criteriaFilteredResults[teamId]?.length > 0) {
+    return state.criteriaFilteredResults[teamId];
+  }
+  if (useAlt && state.selectedResults[teamId].length > 0) {
     return state.selectedResults[teamId];
   }
   return state.results[teamId] ?? [];
@@ -374,19 +419,43 @@ function renderCriteriaList(teamId) {
     ? rankOrderWeights(team.criteriaOrder.map((_, i) => i + 1), state.p)
     : [];
 
+  // Seed criteriaSelections to all criteria on first render
+  if (!team.criteriaSelections.length && team.criteriaOrder.length) {
+    team.criteriaSelections = [...team.criteriaOrder];
+  }
+
+  const filterActive     = document.getElementById(`${teamId}-calc-criteria`)?.checked ?? false;
+  // Weights for the active (possibly filtered) criteria order
+  const activeOrder      = filterActive && team.criteriaSelections.length > 0
+    ? team.criteriaOrder.filter(id => team.criteriaSelections.includes(id))
+    : null;
+  const activeWeights    = activeOrder
+    ? rankOrderWeights(activeOrder.map((_, i) => i + 1), state.p)
+    : null;
+
   listEl.innerHTML = '';
   team.criteriaOrder.forEach((criterionId, idx) => {
     const c = state.criteria.find(x => x.id === criterionId);
     if (!c) return;
 
     const li = document.createElement('li');
-    li.className = 'criterion-item';
+    const isChecked = team.criteriaSelections.includes(criterionId);
+    li.className = `criterion-item${isChecked ? '' : ' deselected'}`;
     li.dataset.id = criterionId;
 
     const typeIcon  = c.type === 1 ? '↑' : '↓';
     const typeLabel = c.type === 1 ? 'benefit' : 'cost';
-    const weightPct = weights[idx] !== undefined ? (weights[idx] * 100).toFixed(1) + '%' : '';
     const critIcon  = _criterionIcon(c);
+
+    let weightPct;
+    if (filterActive && !isChecked) {
+      weightPct = '—';
+    } else if (filterActive && activeOrder) {
+      const ai = activeOrder.indexOf(criterionId);
+      weightPct = ai >= 0 ? (activeWeights[ai] * 100).toFixed(1) + '%' : '—';
+    } else {
+      weightPct = weights[idx] !== undefined ? (weights[idx] * 100).toFixed(1) + '%' : '';
+    }
 
     li.innerHTML = `
       <span class="drag-handle" aria-label="Drag to reorder">⠿</span>
@@ -394,6 +463,8 @@ function renderCriteriaList(teamId) {
       <span class="criterion-name" title="${critIcon ? critIcon + ' ' : ''}${escHtml(c.name)}">${critIcon ? critIcon + ' ' : ''}${escHtml(c.shortName)}</span>
       <span class="criterion-weight">${escHtml(weightPct)}</span>
       <span class="criterion-type ${typeLabel}" title="${typeLabel}: ${typeLabel === 'benefit' ? 'the higher the better' : 'the higher the worst'}">${typeIcon}</span>
+      <input type="checkbox" class="criterion-checkbox" data-team="${teamId}" data-id="${criterionId}"
+             title="Include in calculation" ${isChecked ? 'checked' : ''}>
     `;
     listEl.appendChild(li);
   });
@@ -509,10 +580,8 @@ function renderCombinedChart() {
   const canvas = document.getElementById('combined-chart');
   if (!canvas || typeof Chart === 'undefined') return;
 
-  const calcEl    = document.getElementById('combined-calc-selected');
-  const calcOnly  = calcEl?.checked ?? false;
-  const r1 = (calcOnly && state.selectedResults.team1.length > 0 ? state.selectedResults.team1 : state.results.team1) ?? [];
-  const r2 = (calcOnly && state.selectedResults.team2.length > 0 ? state.selectedResults.team2 : state.results.team2) ?? [];
+  const r1 = _activeResults('team1', true);
+  const r2 = _activeResults('team2', true);
   if (!r1.length && !r2.length) { _destroyChart(canvas); return; }
 
   const hasT1   = r1.length > 0;
@@ -577,15 +646,13 @@ function renderCombinedSpiderChart() {
   const canvas = document.getElementById('combined-spider');
   if (!canvas || typeof Chart === 'undefined') return;
 
-  const calcEl   = document.getElementById('combined-calc-selected');
-  const calcOnly = calcEl?.checked ?? false;
-  const r1 = (calcOnly && state.selectedResults.team1.length > 0 ? state.selectedResults.team1 : state.results.team1) ?? [];
-  const r2 = (calcOnly && state.selectedResults.team2.length > 0 ? state.selectedResults.team2 : state.results.team2) ?? [];
+  const r1 = _activeResults('team1', true);
+  const r2 = _activeResults('team2', true);
   if (!r1.length && !r2.length) { _destroyChart(canvas); return; }
 
-  // Criteria order: prefer team1's priority order
-  const refOrder = state.teams.team1.criteriaOrder.length
-    ? state.teams.team1.criteriaOrder
+  // Criteria order: use team1's active (possibly filtered) criteria order
+  const refOrder = _activeCriteriaOrder('team1', true).length
+    ? _activeCriteriaOrder('team1', true)
     : state.criteria.map(c => c.id);
   const orderedCriteria = refOrder
     .map(id => state.criteria.find(c => c.id === id))
@@ -713,17 +780,16 @@ function renderCombinedTable() {
   const wrap = document.getElementById('combined-criteria-table-wrap');
   if (!wrap || wrap.hidden) return;
 
-  const calcEl   = document.getElementById('combined-calc-selected');
-  const calcOnly = calcEl?.checked ?? false;
-  const r1 = (calcOnly && state.selectedResults.team1.length > 0 ? state.selectedResults.team1 : state.results.team1) ?? [];
-  const r2 = (calcOnly && state.selectedResults.team2.length > 0 ? state.selectedResults.team2 : state.results.team2) ?? [];
+  const r1 = _activeResults('team1', true);
+  const r2 = _activeResults('team2', true);
   if (!r1.length && !r2.length) {
     wrap.innerHTML = '<p class="empty-msg" style="padding:.75rem 1rem">No data</p>';
     return;
   }
 
-  // Criteria in original sheet order (matches the Google doc)
-  const orderedCriteria = state.criteria.filter(Boolean);
+  // Criteria — use team1's active (possibly filtered) criteria order for combined view
+  const activeCombinedIds = new Set(_activeCriteriaOrder('team1', true));
+  const orderedCriteria   = state.criteria.filter(c => activeCombinedIds.has(c.id));
   if (!orderedCriteria.length) { wrap.innerHTML = ''; return; }
 
   // Alternatives sorted by average combined score
@@ -918,8 +984,9 @@ function renderCriteriaTable(teamId) {
     return;
   }
 
-  // Criteria in original sheet order (matches the Google doc)
-  const orderedCriteria = state.criteria.filter(Boolean);
+  // Criteria in active order (respects criteria filter checkbox)
+  const activeCritIds  = new Set(_activeCriteriaOrder(teamId));
+  const orderedCriteria = state.criteria.filter(c => activeCritIds.has(c.id));
 
   if (!orderedCriteria.length) { wrap.innerHTML = ''; return; }
 
@@ -974,7 +1041,7 @@ function renderSpiderChart(teamId) {
   const results = _activeResults(teamId);
   if (!results.length) { _destroyChart(canvas); return; }
 
-  const orderedCriteria = team.criteriaOrder
+  const orderedCriteria = _activeCriteriaOrder(teamId)
     .map(id => state.criteria.find(c => c.id === id))
     .filter(Boolean);
   if (!orderedCriteria.length) { _destroyChart(canvas); return; }
@@ -1174,6 +1241,47 @@ function wireGlobalButtons() {
       renderCombinedTable();
     }
 
+    // Criteria selection checkboxes
+    if (e.target.classList.contains('criterion-checkbox')) {
+      const { team: teamId, id: criterionId } = e.target.dataset;
+      if (!teamId || !criterionId) return;
+      const sels = state.teams[teamId].criteriaSelections;
+      if (e.target.checked) {
+        if (!sels.includes(criterionId)) sels.push(criterionId);
+      } else {
+        state.teams[teamId].criteriaSelections = sels.filter(id => id !== criterionId);
+      }
+      recompute(teamId);
+      renderCriteriaList(teamId); // refresh deselected class + weight display
+      renderResults(teamId);
+      renderChart(teamId);
+      renderCriteriaTable(teamId);
+      renderSpiderChart(teamId);
+      renderCombinedChart();
+      renderCombinedSpiderChart();
+      renderCombinedTable();
+    }
+
+    // "Calculate selected criteria only" toggle
+    if (e.target.classList.contains('calc-criteria-checkbox')) {
+      const teamId = e.target.dataset.team;
+      if (!teamId) return;
+      if (teamId === 'combined') {
+        renderCombinedChart();
+        renderCombinedSpiderChart();
+        renderCombinedTable();
+      } else {
+        renderCriteriaList(teamId); // refreshes weight display and deselected backgrounds
+        renderResults(teamId);
+        renderChart(teamId);
+        renderCriteriaTable(teamId);
+        renderSpiderChart(teamId);
+        renderCombinedChart();
+        renderCombinedSpiderChart();
+        renderCombinedTable();
+      }
+    }
+
     // Alternative selection checkboxes
     if (e.target.classList.contains('alt-checkbox')) {
       const { team: teamId, alt } = e.target.dataset;
@@ -1370,9 +1478,10 @@ function _restoreState(saved) {
   for (const teamId of TEAMS) {
     if (saved.teams?.[teamId]) {
       Object.assign(state.teams[teamId], {
-        criteriaOrder: saved.teams[teamId].criteriaOrder ?? [],
-        selections:    saved.teams[teamId].selections    ?? [],
-        isDirty:       true  // restored state counts as unsaved
+        criteriaOrder:      saved.teams[teamId].criteriaOrder      ?? [],
+        criteriaSelections: saved.teams[teamId].criteriaSelections ?? [],
+        selections:         saved.teams[teamId].selections         ?? [],
+        isDirty:            true  // restored state counts as unsaved
       });
     }
   }

@@ -826,6 +826,18 @@ ul { list-style: none; }
 .criterion-type.benefit { color: var(--ok); }
 .criterion-type.cost    { color: var(--error); }
 
+.criterion-checkbox {
+  flex-shrink: 0;
+  width: 1rem;
+  height: 1rem;
+  accent-color: var(--team1);
+  cursor: pointer;
+}
+.team2 .criterion-checkbox { accent-color: var(--team2); }
+
+/* Deselected criteria: use a dimmer background (same approach as non-selected alternatives) */
+.criterion-item.deselected { background: var(--surface); }
+
 .sortable-ghost { opacity: .35; background: var(--surface2); }
 .sortable-drag  { box-shadow: var(--shadow); border-color: var(--border) !important; }
 
