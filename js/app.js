@@ -85,7 +85,38 @@ document.addEventListener('DOMContentLoaded', () => {
   renderAllPanels();
 
   // Position and close .method-info popovers
+  function _openMethodInfo(details) {
+    document.querySelectorAll('.method-info[open]').forEach(d => {
+      if (d !== details) d.removeAttribute('open');
+    });
+    if (!details.open) details.setAttribute('open', '');
+    const icon  = details.querySelector('.method-info-icon');
+    const panel = details.querySelector('.method-info-panel');
+    if (!icon || !panel) return;
+    const r = icon.getBoundingClientRect();
+    const panelW = panel.offsetWidth || 352;
+    let left = r.left;
+    if (left + panelW > window.innerWidth - 16) left = window.innerWidth - panelW - 16;
+    if (left < 8) left = 8;
+    panel.style.top  = `${r.bottom + 6}px`;
+    panel.style.left = `${left}px`;
+  }
+
+  // Long-hover (600 ms) opens the popover
+  let _hoverTimer = null;
+  document.addEventListener('mouseover', e => {
+    const icon = e.target.closest('.method-info-icon');
+    if (!icon) return;
+    const details = icon.closest('.method-info');
+    if (!details || details.open) return;
+    _hoverTimer = setTimeout(() => _openMethodInfo(details), 600);
+  });
+  document.addEventListener('mouseout', e => {
+    if (e.target.closest('.method-info-icon')) clearTimeout(_hoverTimer);
+  });
+
   document.addEventListener('click', e => {
+    clearTimeout(_hoverTimer);
     const details = e.target.closest('.method-info');
     // Close all others regardless of where the click landed
     document.querySelectorAll('.method-info[open]').forEach(d => {
@@ -1232,7 +1263,19 @@ async function saveRanking(teamId) {
 
 function startPolling() {
   if (!state.scriptUrl) return;
+  document.getElementById('sync-enabled')?.addEventListener('change', e => {
+    if (e.target.checked) {
+      setStatus('loading', 'Resuming sync…');
+      fetchSheetData(state.scriptUrl)
+        .then(data => { _saveCache(data); applySheetData(data); })
+        .catch(() => setStatus('offline', 'Sheet unreachable — working offline'));
+    } else {
+      setStatus('offline', 'Auto-sync paused');
+    }
+  });
+
   state.pollTimer = setInterval(async () => {
+    if (!document.getElementById('sync-enabled')?.checked) return;
     if (state.isSyncing) return;
     state.isSyncing = true;
     try {
@@ -1268,7 +1311,7 @@ function setStatus(type, message) {
   }
   if (type === 'ok') {
     const ts = document.getElementById('last-synced');
-    if (ts) ts.textContent = `Last synced: ${new Date().toLocaleTimeString()}`;
+    if (ts) ts.textContent = new Date().toLocaleTimeString();
   }
 }
 

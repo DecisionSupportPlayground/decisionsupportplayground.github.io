@@ -447,6 +447,29 @@ ul { list-style: none; }
 .header-left { display: flex; align-items: center; gap: .75rem; }
 .header-right { display: flex; align-items: center; gap: .5rem; }
 
+.sync-toggle-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: .05rem;
+  margin-right: .25rem;
+}
+.sync-toggle-label {
+  display: flex;
+  align-items: center;
+  gap: .3rem;
+  font-size: .75rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.sync-toggle-label input { cursor: pointer; }
+.last-synced-ts {
+  font-size: .68rem;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
 .app-title {
   font-size: .95rem;
   font-weight: 700;

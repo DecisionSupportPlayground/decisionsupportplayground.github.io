@@ -23,10 +23,16 @@
       <span id="sync-status" class="loading">Connecting…</span>
     </div>
     <div class="header-right">
-      <span id="last-synced"></span>
+      <div class="sync-toggle-wrap">
+        <label class="sync-toggle-label">
+          <input id="sync-enabled" type="checkbox" checked>
+          Auto-sync
+        </label>
+        <span id="last-synced" class="last-synced-ts"></span>
+      </div>
       <button id="refresh-btn" class="btn-secondary">Refresh Now</button>
-      <button id="theme-toggle" class="btn-icon-sm" title="Toggle light/dark mode">☀</button>
       <button id="disconnect-btn" class="btn-secondary">Disconnect</button>
+      <button id="theme-toggle" class="btn-icon-sm" title="Toggle light/dark mode">☀</button>
     </div>
   </header>
 
@@ -37,7 +43,7 @@
         <div class="setting-label">
           Weight Exponent (p)
           <details class="method-info">
-            <summary class="method-info-icon" title="About the weight exponent">ℹ</summary>
+            <summary class="method-info-icon">ℹ</summary>
             <div class="method-info-panel">
               <p style="margin:0 0 .5rem">Controls how strongly criteria priority order affects weights: <em>w<sub>i</sub> = (n − r<sub>i</sub> + 1)<sup>p</sup> / Σ(n − r<sub>j</sub> + 1)<sup>p</sup></em></p>
               <dl>
@@ -67,7 +73,7 @@
         <div class="setting-label">
           MCDM Method
           <details class="method-info">
-            <summary class="method-info-icon" title="About these methods">ℹ</summary>
+            <summary class="method-info-icon">ℹ</summary>
             <div class="method-info-panel">
               <dl>
                 <dt>TOPSIS</dt>
@@ -175,7 +181,7 @@
         <div class="section-title">
           Criteria Priority
           <details class="method-info">
-            <summary class="method-info-icon" title="About criteria priority">?</summary>
+            <summary class="method-info-icon">?</summary>
             <div class="method-info-panel">
               <p>Drag criteria up or down to reflect what matters most to your community. Rank 1 carries the most weight.</p>
               <p>Priority only affects the results if you set the Weight Exponent above zero — at p = 0 all criteria are equal regardless of order.</p>
@@ -196,7 +202,7 @@
         <div class="section-title">
           Ranked Alternatives
           <details class="method-info">
-            <summary class="method-info-icon" title="About ranked alternatives">?</summary>
+            <summary class="method-info-icon">?</summary>
             <div class="method-info-panel">
               <p>Use ★ to narrow a long list of alternatives down to the ones your team will actually consider. Checking <em>Calculate selected only</em> re-ranks just those, so scores reflect your shortlist rather than the full set.</p>
               <p class="hint">Before finalising, re-examine the full list rankings to make sure you haven't overlooked an option that better serves your goals.</p>
@@ -231,7 +237,7 @@
         <div class="section-title">
           Criteria Priority
           <details class="method-info">
-            <summary class="method-info-icon" title="About criteria priority">?</summary>
+            <summary class="method-info-icon">?</summary>
             <div class="method-info-panel">
               <p>Drag criteria up or down to reflect what matters most to your community. Rank 1 carries the most weight.</p>
               <p>Priority only affects the results if you set the Weight Exponent above zero — at p = 0 all criteria are equal regardless of order.</p>
@@ -252,7 +258,7 @@
         <div class="section-title">
           Ranked Alternatives
           <details class="method-info">
-            <summary class="method-info-icon" title="About ranked alternatives">?</summary>
+            <summary class="method-info-icon">?</summary>
             <div class="method-info-panel">
               <p>Use ★ to narrow a long list of alternatives down to the ones your team will actually consider. Checking <em>Calculate selected only</em> re-ranks just those, so scores reflect your shortlist rather than the full set.</p>
               <p class="hint">Before finalising, re-examine the full list rankings to make sure you haven't overlooked an option that better serves your goals.</p>
