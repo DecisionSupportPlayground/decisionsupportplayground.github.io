@@ -359,10 +359,15 @@ export async function saveSnapshotToSheet(scriptUrl, snapshot) {
  */
 export function logEvent(scriptUrl, event, team, properties = {}) {
   if (!scriptUrl) return;
+  let sessionId = sessionStorage.getItem('madm_session_id');
+  if (!sessionId) {
+    sessionId = 'sess_' + Math.random().toString(36).slice(2, 9);
+    sessionStorage.setItem('madm_session_id', sessionId);
+  }
   fetch(scriptUrl, {
     method:  'POST',
     headers: { 'Content-Type': 'text/plain' },
-    body:    JSON.stringify({ action: 'logEvent', event, team, properties })
+    body:    JSON.stringify({ action: 'logEvent', event, team, properties: { sessionId, ...properties } })
   }).catch(() => {}); // never block the UI
 }
 
