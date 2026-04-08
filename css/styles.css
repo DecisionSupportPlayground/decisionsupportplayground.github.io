@@ -919,6 +919,7 @@ ul { list-style: none; }
   -webkit-appearance: none;
   width: 16px;
   height: 16px;
+  margin-top: -12px;
   border-radius: 50%;
   background: var(--ihe-blue);
   border: 2px solid var(--bg);
