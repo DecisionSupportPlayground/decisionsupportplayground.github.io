@@ -19,6 +19,13 @@
   <header class="app-header">
     <div class="header-left">
       <span class="app-title">MADM <span>Decision Maker</span></span>
+      <details class="method-info">
+        <summary class="method-info-icon">ℹ</summary>
+        <div class="method-info-panel">
+          <p>This tool supports group decision-making across two teams using Multi-Criteria Decision Analysis (MCDA). Each team independently ranks criteria by importance and selects preferred alternatives — the combined view shows where teams agree and where they differ.</p>
+          <p class="hint">The goal is to help teams collaborate — by making values and trade-offs explicit, decisions become better informed and more transparent.</p>
+        </div>
+      </details>
       <span id="sync-dot" class="sync-dot loading" title="Connecting…"></span>
       <span id="sync-status" class="loading">Connecting…</span>
     </div>
@@ -30,6 +37,14 @@
         </label>
         <span id="last-synced" class="last-synced-ts"></span>
       </div>
+      <details class="method-info">
+        <summary class="method-info-icon">ℹ</summary>
+        <div class="method-info-panel">
+          <p>Data is stored in a Google Sheet and synced automatically every 5 seconds when Auto-sync is on.</p>
+          <p><strong>Save Ranking</strong> writes your team's criteria order and selected alternatives back to the sheet.</p>
+          <p class="hint">Use <strong>Refresh Now</strong> to pull the latest data immediately. Use <strong>Disconnect</strong> to switch to a different Google Sheet.</p>
+        </div>
+      </details>
       <button id="refresh-btn" class="btn-secondary">Refresh Now</button>
       <button id="disconnect-btn" class="btn-secondary">Disconnect</button>
       <button id="theme-toggle" class="btn-icon-sm" title="Toggle light/dark mode">☀</button>
