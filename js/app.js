@@ -9,7 +9,7 @@
  *   - Delegates rendering to renderPanel() and renderChart()
  */
 
-import { initMCDM, rankOrderWeights, runMethod, scoreToRank } from './mcdm.js';
+import { initMCDM, rankOrderWeights, runMethod, scoreToRank, normaliseScores, invertRanksForDisplay } from './mcdm.js?v=2';
 import { initTheme } from './theme.js';
 import {
   parseAlternativesCSV,
@@ -661,12 +661,8 @@ function _renderCombinedSpiderChart(displayIds) {
   if (!canvas || typeof Chart === 'undefined') return;
   if (!displayIds.length) { _destroyChart(canvas); return; }
 
-  const refOrder = _activeCriteriaOrder('team1').length
-    ? _activeCriteriaOrder('team1')
-    : state.criteria.map(c => c.id);
-  const orderedCriteria = refOrder
-    .map(id => state.criteria.find(c => c.id === id))
-    .filter(Boolean);
+  const activeCritIds = new Set(_activeCriteriaOrder('team1'));
+  const orderedCriteria = state.criteria.filter(c => !activeCritIds.size || activeCritIds.has(c.id));
   if (!orderedCriteria.length) { _destroyChart(canvas); return; }
 
   const colStats = orderedCriteria.map(crit => {
@@ -675,8 +671,7 @@ function _renderCombinedSpiderChart(displayIds) {
     return { min: Math.min(...vals), max: Math.max(...vals) };
   });
 
-  const palette = [_cssVar('--team1'), _cssVar('--team2'), _cssVar('--combined'), '#a78bfa', '#fb923c'];
-  _renderSpiderChart(canvas, displayIds, orderedCriteria, colStats, palette);
+  _renderSpiderChart(canvas, displayIds, orderedCriteria, colStats, displayIds.map(_altColor));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -785,15 +780,9 @@ function renderCopelandPanel() {
   // Spider chart
   const spiderWrap = document.getElementById('combined-spider-wrap');
   if (spiderWrap && !spiderWrap.hidden) {
-    const GOLD = '#f59e0b', SILVER = '#94a3b8', BRONZE = '#b45309', MUTED = '#6b7280';
-    const copelandPalette = copeland.map((_, i) =>
-      i === 0 ? GOLD : i === 1 ? SILVER : i === 2 ? BRONZE : MUTED
-    );
     const displayIds = copeland.slice(0, 5).map(r => r.id);
-    const refOrder = _activeCriteriaOrder('team1').length
-      ? _activeCriteriaOrder('team1')
-      : state.criteria.map(c => c.id);
-    const orderedCriteria = refOrder.map(id => state.criteria.find(c => c.id === id)).filter(Boolean);
+    const activeCritIds2 = new Set(_activeCriteriaOrder('team1'));
+    const orderedCriteria = state.criteria.filter(c => !activeCritIds2.size || activeCritIds2.has(c.id));
     if (orderedCriteria.length) {
       const colStats = orderedCriteria.map(crit => {
         const ci   = state.criteria.findIndex(c => c.id === crit.id);
@@ -801,7 +790,7 @@ function renderCopelandPanel() {
         return { min: Math.min(...vals), max: Math.max(...vals) };
       });
       const spiderCanvas = document.getElementById('combined-spider');
-      if (spiderCanvas) _renderSpiderChart(spiderCanvas, displayIds, orderedCriteria, colStats, copelandPalette);
+      if (spiderCanvas) _renderSpiderChart(spiderCanvas, displayIds, orderedCriteria, colStats, displayIds.map(_altColor));
     }
   }
 
@@ -1120,6 +1109,25 @@ function _renderSensitivityResults(el, cache) {
 }
 
 /**
+ * Resolve a weight vector (in critIds order) for the method-comparison spider.
+ *
+ * mode       | source
+ * -----------|---------------------------------------------------
+ * 'consensus'| combined team's agreed criteria order (default)
+ * 'combined' | midpoint blend of team1+team2 (Copeland tab)
+ * 'team1'    | team 1's criteria priority order
+ * 'team2'    | team 2's criteria priority order
+ */
+function _weightsForSpiderMode(mode, critIds, midWeights) {
+  if (mode === 'combined') return midWeights; // pre-computed blend in cache
+  const teamId = mode === 'consensus' ? 'combined' : mode; // 'combined' state key = consensus order
+  const wMap = _buildWeightVectorForTeam(teamId);
+  const raw  = critIds.map(id => wMap.get(id) ?? 0);
+  const sum  = raw.reduce((a, b) => a + b, 0);
+  return sum > 0 ? raw.map(v => v / sum) : raw.map(() => 1 / raw.length);
+}
+
+/**
  * Render the method-comparison radar chart: 4 axes (TOPSIS, SAW, MABAC, ARAS),
  * one dataset per selected alternative, scores normalised per-method to [0–1].
  */
@@ -1127,30 +1135,37 @@ function _renderMethodComparisonSpider(cache) {
   const canvas = document.getElementById('combined-method-spider');
   if (!canvas || typeof Chart === 'undefined') return;
 
-  const { matrix, types, midWeights, altIds } = cache;
+  const { matrix, types, midWeights, altIds, critIds } = cache;
   if (!matrix?.length || !midWeights?.length) { _destroyChart(canvas); return; }
 
   const METHODS      = ['topsis', 'saw', 'mabac', 'aras'];
   const METHOD_LABELS = ['TOPSIS', 'SAW', 'MABAC', 'ARAS'];
 
-  // Run each method with the midpoint weight blend
-  const rawScores = METHODS.map(m => {
-    try { return runMethod(m, matrix, midWeights, types); }
-    catch { return altIds.map(() => 0); }
-  });
+  // Resolve which weight vector to use based on the dropdown.
+  const modeEl = document.getElementById('spider-weight-mode');
+  const mode   = modeEl?.value ?? 'consensus';
+  // Update team name labels now that state is loaded
+  if (modeEl) {
+    const t1opt = modeEl.querySelector('option[value="team1"]');
+    const t2opt = modeEl.querySelector('option[value="team2"]');
+    if (t1opt && state.teams.team1.name) t1opt.textContent = state.teams.team1.name;
+    if (t2opt && state.teams.team2.name) t2opt.textContent = state.teams.team2.name;
+  }
+  const spiderWeights = _weightsForSpiderMode(mode, critIds, midWeights);
+  if (!spiderWeights) { _destroyChart(canvas); return; }
 
-  // Normalise each method's scores to [0, 1] so axes are comparable
-  const normalised = rawScores.map(scores => {
-    const min = Math.min(...scores), max = Math.max(...scores);
-    return max === min ? scores.map(() => 0.5) : scores.map(s => (s - min) / (max - min));
-  });
-
-  // Alternatives to display: union of selections, or top-5 by average normalised score
+  // Determine which alternatives to display first.
+  // Fall back to top-5 by score (using full matrix) only when nothing is selected.
   const selectedIds = new Set([...state.teams.team1.selections, ...state.teams.team2.selections]);
   let displayIds = altIds.filter(id => selectedIds.has(id));
   if (!displayIds.length) {
+    const fallbackScores = METHODS.map(m => {
+      try { return runMethod(m, matrix, spiderWeights, types); }
+      catch { return altIds.map(() => 0); }
+    });
+    const fallbackNorm = fallbackScores.map(normaliseScores);
     displayIds = altIds
-      .map((id, ai) => ({ id, avg: normalised.reduce((s, n) => s + n[ai], 0) / METHODS.length }))
+      .map((id, ai) => ({ id, avg: fallbackNorm.reduce((s, n) => s + n[ai], 0) / METHODS.length }))
       .sort((a, b) => b.avg - a.avg)
       .slice(0, 5)
       .map(r => r.id);
@@ -1158,19 +1173,26 @@ function _renderMethodComparisonSpider(cache) {
   // Sort clockwise: A1, A2, A3… A9, A11, A12…
   displayIds.sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
 
-  const altPalette = [
-    _cssVar('--team1'), _cssVar('--team2'), _cssVar('--combined'),
-    '#a78bfa', '#fb923c', '#f43f5e', '#22d3ee', '#84cc16'
-  ];
+  // Build a sub-matrix for displayIds only.  This ensures rankings and
+  // normalised scores are computed within this set, not against the full
+  // alt pool (which would skew TOPSIS/MABAC ideal/anti-ideal values).
+  const displayMatrix = displayIds.map(id => matrix[altIds.indexOf(id)]);
+  const displayScores = METHODS.map(m => {
+    try { return runMethod(m, displayMatrix, spiderWeights, types); }
+    catch { return displayIds.map(() => 0); }
+  });
+
+  // Normalise each method's scores to [0, 1] so axes are comparable
+  const normalised = displayScores.map(normaliseScores);
+
   const methodPalette = ['#3b82f6', '#f59e0b', '#22c55e', '#ec4899'];
   const gridColor = _cssVar('--border');
   const tickColor = _cssVar('--text-muted');
 
   // ── Chart 1: axes = methods, lines = alternatives (normalised scores) ──────
   const datasets1 = displayIds.map((id, di) => {
-    const ai    = altIds.indexOf(id);
-    const data  = normalised.map(n => +(n[ai] ?? 0).toFixed(3));
-    const color = altPalette[di % altPalette.length];
+    const data  = normalised.map(n => +(n[di] ?? 0).toFixed(3));
+    const color = _altColor(id);
     const alt   = state.alternatives.find(a => a.id === id);
     return {
       label:                id + (alt?.description ? `: ${alt.description}` : ''),
@@ -1218,12 +1240,9 @@ function _renderMethodComparisonSpider(cache) {
   if (!canvas2) return;
 
   const n = displayIds.length;
-  // Rank within the displayed set only (1 = best). Inverted so further from centre = better.
+  // Rank within the displayed set only. Rank #1 (best) -> n (outer ring); rank #n (worst) -> 1 (centre).
   const datasets2 = METHODS.map((_m, mi) => {
-    const scores = displayIds.map(id => rawScores[mi][altIds.indexOf(id)]);
-    const sorted = [...scores].sort((a, b) => b - a);   // descending = rank 1 best
-    const rankOf = s => sorted.indexOf(s) + 1;
-    const data   = scores.map(s => +(n - rankOf(s) + 1).toFixed(0)); // invert: rank1 → n (far from centre)
+    const data = invertRanksForDisplay(displayScores[mi]); // rank 1 (best) -> n (far from centre)
     const color  = methodPalette[mi % methodPalette.length];
     return {
       label:                METHOD_LABELS[mi],
@@ -1244,10 +1263,7 @@ function _renderMethodComparisonSpider(cache) {
     canvas2._chart = new Chart(canvas2, {
       type: 'radar',
       data: { labels: displayIds, datasets: datasets2 },
-      options: radarOpts(displayIds, n, ctx => {
-        const rank = n - ctx.parsed.r + 1;
-        return ` ${ctx.dataset.label}: rank #${rank}`;
-      })
+      options: radarOpts(displayIds, n, ctx => ` ${ctx.dataset.label}: rank #${n - ctx.parsed.r + 1}`)
     });
   }
 }
@@ -1550,9 +1566,8 @@ function renderSpiderChart(teamId) {
   const results = _activeResults(teamId);
   if (!results.length) { _destroyChart(canvas); return; }
 
-  const orderedCriteria = _activeCriteriaOrder(teamId)
-    .map(id => state.criteria.find(c => c.id === id))
-    .filter(Boolean);
+  const activeCritIds = new Set(_activeCriteriaOrder(teamId));
+  const orderedCriteria = state.criteria.filter(c => activeCritIds.has(c.id));
   if (!orderedCriteria.length) { _destroyChart(canvas); return; }
 
   const sels = team.selections;
@@ -1567,12 +1582,7 @@ function renderSpiderChart(teamId) {
     return { min: Math.min(...vals), max: Math.max(...vals) };
   });
 
-  const teamColor = teamId === 'combined'
-    ? _cssVar('--combined')
-    : _cssVar(teamId === 'team1' ? '--team1' : '--team2');
-  const palette = [teamColor, _cssVar(teamId === 'team1' ? '--team2' : '--team1'), '#a78bfa', '#fb923c', '#34d399'];
-
-  _renderSpiderChart(canvas, displayResults.map(r => r.id), orderedCriteria, colStats, palette);
+  _renderSpiderChart(canvas, displayResults.map(r => r.id), orderedCriteria, colStats, displayResults.map(r => _altColor(r.id)));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1724,6 +1734,10 @@ function wireGlobalButtons() {
   });
 
   // Save snapshot
+  document.getElementById('spider-weight-mode')?.addEventListener('change', () => {
+    if (state.sensitivityCache) _renderMethodComparisonSpider(state.sensitivityCache);
+  });
+
   document.getElementById('save-snapshot-btn')?.addEventListener('click', async () => {
     const name = prompt('Snapshot name:', `Snapshot ${new Date().toLocaleTimeString()}`);
     if (name === null) return; // cancelled
@@ -2009,6 +2023,19 @@ function showToast(message, type = 'success') {
     toast.classList.remove('visible');
     setTimeout(() => toast.remove(), 300);
   }, 3000);
+}
+
+const ALT_PALETTE = [
+  '#2ea0ed', '#3abf8f', '#f59e0b', '#a78bfa', '#fb923c',
+  '#f43f5e', '#22d3ee', '#84cc16', '#e879f9', '#64748b',
+  '#06b6d4', '#10b981', '#f97316', '#8b5cf6', '#ec4899',
+  '#14b8a6', '#eab308', '#6366f1', '#ef4444', '#0ea5e9',
+];
+
+/** Returns a stable color for an alternative ID based on its position in state.alternatives. */
+function _altColor(altId) {
+  const idx = state.alternatives.findIndex(a => a.id === altId);
+  return ALT_PALETTE[(idx >= 0 ? idx : 0) % ALT_PALETTE.length];
 }
 
 /** Read a CSS custom property value from :root. */

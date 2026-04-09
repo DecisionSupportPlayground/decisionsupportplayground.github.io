@@ -218,6 +218,15 @@
               <canvas id="combined-method-spider"></canvas>
             </div>
             <div class="method-spider-col">
+              <div class="spider-mode-row">
+                <label for="spider-weight-mode" class="spider-mode-label">Weights from:</label>
+                <select id="spider-weight-mode">
+                  <option value="consensus" selected>Consensus</option>
+                  <option value="combined">Combined</option>
+                  <option value="team1">Team 1</option>
+                  <option value="team2">Team 2</option>
+                </select>
+              </div>
               <p class="sensitivity-hint">Differences between method lines indicate alternatives whose ranking is sensitive to the choice of MCDM method. Where lines converge, the ranking is robust regardless of method.</p>
               <canvas id="combined-method-spider-2"></canvas>
             </div>
@@ -362,6 +371,6 @@
     <option value="1">
   </datalist>
 
-  <script type="module" src="js/app.js?v=8"></script>
+  <script type="module" src="js/app.js?v=13"></script>
 </body>
 </html>

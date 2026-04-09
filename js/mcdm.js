@@ -197,3 +197,39 @@ export function scoreToRank(scores) {
   return scores.map(s => sorted.indexOf(s) + 1);
 }
 
+/**
+ * Normalise scores to [0, 1] using min-max scaling.
+ * Used by the method-comparison spider chart so all methods share a common axis.
+ *
+ * If all scores are identical (flat), returns 0.5 for every element so the
+ * spider chart still renders a visible polygon rather than collapsing to a point.
+ *
+ * @param {number[]} scores  Raw scores from any MCDM method.
+ * @returns {number[]}       Values in [0, 1]; higher = better.
+ */
+export function normaliseScores(scores) {
+  const min = Math.min(...scores), max = Math.max(...scores);
+  return max === min
+    ? scores.map(() => 0.5)
+    : scores.map(s => (s - min) / (max - min));
+}
+
+/**
+ * Convert scores to inverted display values for a radar/spider chart where
+ * "further from centre = better rank".
+ *
+ * Rank 1 (best score) maps to n (farthest from centre).
+ * Rank n (worst score) maps to 1 (closest to centre).
+ *
+ * Formula: display = n - sorted_position(score)
+ *   where sorted_position is the 0-based index in descending-sorted scores.
+ *
+ * @param {number[]} scores  Raw scores (higher = better).
+ * @returns {number[]}       Integer display values in [1, n].
+ */
+export function invertRanksForDisplay(scores) {
+  const n = scores.length;
+  const sorted = [...scores].sort((a, b) => b - a); // descending: index 0 = best
+  return scores.map(s => n - sorted.indexOf(s));    // rank 1 (index 0) -> n
+}
+
