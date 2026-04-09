@@ -1,5 +1,5 @@
 /**
- * data.js — Data loading and persistence layer.
+ * data.js: Data loading and persistence layer.
  *
  * Handles:
  *   - Parsing Alternatives CSV into structured objects
@@ -20,7 +20,7 @@ const FETCH_TIMEOUT_MS = 8000;
  *
  * Expected format (matches the Google Sheets template):
  *
- *   Row 1  — headers
+ *   Row 1 : headers
  *     col 0 : "ID"
  *     col 1 : "Description"
  *     col 2+ : criterion names; each must contain either
@@ -29,7 +29,7 @@ const FETCH_TIMEOUT_MS = 8000;
  *              If neither phrase is found the criterion is treated as
  *              benefit with a console warning.
  *
- *   Rows 2+ — one alternative per row
+ *   Rows 2+: one alternative per row
  *     col 0 : alternative ID  (e.g. "A1", "A6.2")
  *     col 1 : short description
  *     col 2+ : numeric values aligned with header columns
@@ -69,7 +69,7 @@ export function parseAlternativesCSV(csvText) {
     const isBenefit = /higher the better/i.test(raw);
     const type = isCost ? -1 : 1;
     if (!isCost && !isBenefit && raw.length > 0) {
-      console.warn(`Criterion at column ${j} ("${raw}") has no type hint — treating as benefit.`);
+      console.warn(`Criterion at column ${j} ("${raw}") has no type hint, treating as benefit.`);
     }
 
     // Short name: strip the parenthetical type hint
@@ -129,7 +129,7 @@ export function parseAlternativesCSV(csvText) {
  *   Row 1+: ["team1","Upper Basin","I4",1,0,"topsis",'["A1"]',"ISO-timestamp"]
  *   ...one row per criterion for each team
  *
- * Legacy format (one row per team with JSON arrays — still supported for
+ * Legacy format (one row per team with JSON arrays: still supported for
  * spreadsheets initialized before the format change):
  *   Row 0 (header): ["team","criteriaOrder","selections","p","method","lastUpdated"]
  *   Row 1: ["team1", JSON-array, JSON-array, number, string, ISO-timestamp]
@@ -302,7 +302,7 @@ export async function fetchSheetData(scriptUrl) {
 }
 
 /**
- * Fetch only the lastModified timestamp — lightweight polling check.
+ * Fetch only the lastModified timestamp: lightweight polling check.
  * Avoids re-downloading the full dataset on every poll tick.
  *
  * @param {string} scriptUrl
@@ -350,7 +350,7 @@ export async function saveSnapshotToSheet(scriptUrl, snapshot) {
 }
 
 /**
- * Log a user interaction event to the Events sheet — fire-and-forget.
+ * Log a user interaction event to the Events sheet: fire-and-forget.
  * Silently no-ops when scriptUrl is absent (local CSV mode).
  *
  * @param {string} scriptUrl

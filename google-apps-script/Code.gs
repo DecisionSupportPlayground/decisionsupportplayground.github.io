@@ -1,5 +1,5 @@
 /**
- * MADM Decision Maker — Google Apps Script backend
+ * MADM Decision Maker: Google Apps Script backend
  * ===================================================
  *
  * ⚠️  PUBLIC ACCESS NOTICE
@@ -22,10 +22,10 @@
  * this spreadsheet for the first time.
  *
  * Sheet tabs used:
- *   Alternatives  — read-only decision matrix (filled in manually)
- *   Rankings      — team ranking state (managed by the web app)
- *   Snapshots     — saved snapshots      (managed by the web app)
- *   _meta         — internal last-modified timestamp (hidden)
+ *   Alternatives : read-only decision matrix (filled in manually)
+ *   Rankings     : team ranking state (managed by the web app)
+ *   Snapshots    : saved snapshots      (managed by the web app)
+ *   _meta        : internal last-modified timestamp (hidden)
  */
 
 // ─── Tab names ───────────────────────────────────────────────────────────────
@@ -114,13 +114,13 @@ function doPost(e) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Writes one team's ranking to the Rankings tab — one row per criterion.
+ * Writes one team's ranking to the Rankings tab: one row per criterion.
  *
  * Rankings tab layout (one row per criterion per team):
  *   Col A: team          ("team1" | "team2")
  *   Col B: teamName      (human-readable, e.g. "Upper Basin")
  *   Col C: criterionId   (e.g. "I1", "I4")
- *   Col D: rank          (1-based integer — 1 = highest priority)
+ *   Col D: rank          (1-based integer: 1 = highest priority)
  *   Col E: p             (number: 0 | 0.5 | 1)
  *   Col F: method        (string: "topsis" | "saw" | "mabac" | "aras")
  *   Col G: selections    (JSON array of selected alternative IDs)
@@ -157,7 +157,7 @@ function _saveRankings(team, rankings) {
     for (var i = 0; i < existingData.length; i++) {
       var rowTeam = String(existingData[i][0]).trim();
       if (rowTeam !== '' && rowTeam !== team) {
-        // Criterion IDs look like "I1", "I2" — they never start with "[".
+        // Criterion IDs look like "I1", "I2": they never start with "[".
         // Old-format rows had a JSON array in column 2; skip them silently so the
         // other team will re-save their own data from local browser state.
         var col2 = String(existingData[i][2] || '');
@@ -168,7 +168,7 @@ function _saveRankings(team, rankings) {
     }
   }
 
-  // Rebuild: header + other team's rows + new team rows — write in one batch
+  // Rebuild: header + other team's rows + new team rows: write in one batch
   var allRows = [RANKINGS_HEADER].concat(otherRows).concat(newTeamRows);
   sheet.clearContents();
   sheet.getRange(1, 1, allRows.length, COLS).setValues(allRows);
@@ -302,7 +302,7 @@ function onOpen() {
 
 /**
  * Creates required tabs with the correct headers if they don't already exist.
- * Safe to run multiple times — existing data is not overwritten.
+ * Safe to run multiple times: existing data is not overwritten.
  */
 function initializeSheets() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -348,7 +348,7 @@ function initializeSheets() {
   // ── Rankings tab ─────────────────────────────────────────────────────────
   var rankSheet = _getOrCreateSheet(TAB_RANKINGS);
   if (rankSheet.getLastRow() === 0) {
-    // Default state from DATA_Ranking.csv — one row per criterion per team.
+    // Default state from DATA_Ranking.csv: one row per criterion per team.
     // Use a single setValues() batch (not appendRow loops) to avoid the
     // 30-second Apps Script execution limit timing out after only one team's rows.
     var team1Criteria   = ['I4','I1','I7','I9','I6','I5','I8','I10','I3','I2'];
@@ -391,12 +391,12 @@ function initializeSheets() {
 
 function showHelp() {
   SpreadsheetApp.getUi().alert(
-    'MADM Decision Maker — Help\n\n' +
+    'MADM Decision Maker - Help\n\n' +
     'This spreadsheet is the data backend for the MADM Decision Maker web app.\n\n' +
     'Tabs:\n' +
-    '  Alternatives — the decision matrix (edit this with your alternatives data)\n' +
-    '  Rankings     — team rankings (one row per criterion per team; do not edit manually)\n' +
-    '  Snapshots    — saved decision snapshots (do not edit manually)\n\n' +
+    '  Alternatives: the decision matrix (edit this with your alternatives data)\n' +
+    '  Rankings    : team rankings (one row per criterion per team; do not edit manually)\n' +
+    '  Snapshots   : saved decision snapshots (do not edit manually)\n\n' +
     'For setup instructions, see SETUP.md in the project repository.'
   );
 }

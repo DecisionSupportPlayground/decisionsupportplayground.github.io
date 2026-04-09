@@ -21,7 +21,7 @@
     <div class="landing-logo">
       <h1>MADM <span>Decision Maker</span></h1>
       <p>Multi-Criteria Analysis for Group Decision Making</p>
-      <p class="ihe-attribution">IHE Delft — Module 07: Decision Support Systems</p>
+      <p class="ihe-attribution">IHE Delft - Module 07: Decision Support Systems</p>
     </div>
 
     <!-- Alert banner (shown on error redirect) -->
@@ -51,7 +51,7 @@
       <!-- Offline mode: load a local CSV file -->
       <div class="offline-row">
         <button id="load-csv-btn" class="btn-secondary">Load CSV file</button>
-        <span>Work offline with a local alternatives file — rankings are saved in the browser.</span>
+        <span>Work offline with a local alternatives file; rankings are saved in the browser.</span>
       </div>
       <!-- Hidden file input, triggered by the button above -->
       <input id="csv-file-input" type="file" accept=".csv,text/csv" hidden>
@@ -68,33 +68,33 @@
       <summary class="setup-guide-toggle">How to set up your Google Sheet ▾</summary>
       <ol class="setup-steps">
         <li>
-          <strong>Download the script</strong> — click "Download Script" above.
+          <strong>Download the script</strong>: click "Download Script" above.
           The file is a plain text file; open it in any text editor (Notepad, TextEdit, VS Code).
         </li>
         <li>
-          <strong>Create a Google Sheet</strong> — go to
+          <strong>Create a Google Sheet</strong>: go to
           <a href="https://sheets.google.com" target="_blank" rel="noopener">sheets.google.com</a>
           and open a new blank spreadsheet.
         </li>
         <li>
-          <strong>Open the Apps Script editor</strong> — in the spreadsheet, click
+          <strong>Open the Apps Script editor</strong>: in the spreadsheet, click
           <em>Extensions → Apps Script</em>.
         </li>
         <li>
-          <strong>Replace the default code</strong> — select all text in the editor
+          <strong>Replace the default code</strong>: select all text in the editor
           (Ctrl+A / ⌘+A), delete it, then paste the contents of the downloaded script.
           Save with Ctrl+S / ⌘+S.
         </li>
         <li>
-          <strong>Run the setup function</strong> — in the Apps Script editor toolbar,
+          <strong>Run the setup function</strong>: in the Apps Script editor toolbar,
           make sure the function selector shows <code>initializeSheets</code>, then click
-          the ▶ Run button. You will be prompted to authorize the script — click through
+          the ▶ Run button. You will be prompted to authorize the script and click through
           to allow it to access your spreadsheet.
           <span class="setup-note">This creates the Alternatives, Rankings, and Snapshots
           tabs and fills in the course example data.</span>
         </li>
         <li>
-          <strong>Deploy as a web app</strong> — still in the Apps Script editor, click
+          <strong>Deploy as a web app</strong>: still in the Apps Script editor, click
           <em>Deploy → New deployment</em>. Click the gear icon ⚙ next to "Select type"
           and choose <em>Web app</em>. Set:
           <ul>
@@ -111,7 +111,7 @@
       <p class="setup-note setup-note-tip">
         <strong>Tip:</strong> Each group needs their own copy of the sheet and their own
         deployment URL. Making a copy of the spreadsheet does <em>not</em> copy the
-        deployment — you must re-deploy from each copy.
+        deployment; you must re-deploy from each copy.
       </p>
     </details>
 

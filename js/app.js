@@ -1,5 +1,5 @@
 /**
- * app.js — Main application controller for app.html.
+ * app.js: Main application controller for app.html.
  *
  * Responsibilities:
  *   - Owns the single application state object
@@ -38,9 +38,9 @@ const TEAMS     = ['team1', 'team2'];
 const CACHE_KEY = 'madm_sheet_cache';
 
 const DEFAULT_TEAM = {
-  criteriaOrder:      [], // ['I1','I2',...] — index 0 = rank 1 (highest priority)
-  criteriaSelections: [], // ['I1','I2',...] — subset to include; empty = all included
-  selections:         [], // ['A1','A4',...] — selected alternatives
+  criteriaOrder:      [], // ['I1','I2',...]: index 0 = rank 1 (highest priority)
+  criteriaSelections: [], // ['I1','I2',...]: subset to include; empty = all included
+  selections:         [], // ['A1','A4',...]: selected alternatives
   lastUpdated:        null,
   isDirty:            false, // unsaved local changes
   isSaving:           false
@@ -163,7 +163,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (isOffline && offlineCsv) {
     // Offline mode: parse the locally loaded CSV directly
     const fileName = sessionStorage.getItem('madm_local_csv_name') || 'local file';
-    setStatus('offline', `Offline — ${fileName}`);
+    setStatus('offline', `Offline: ${fileName}`);
     try {
       const parsed = parseAlternativesCSV(offlineCsv);
       state.criteria     = parsed.criteria;
@@ -184,11 +184,11 @@ document.addEventListener('DOMContentLoaded', () => {
     return; // no polling in offline mode
   }
 
-  // Online mode — render from cache immediately, then refresh in background
+  // Online mode: render from cache immediately, then refresh in background
   const cached = _loadCache();
   if (cached) {
     applySheetData(cached);
-    setStatus('cached', 'Cached data — syncing…');
+    setStatus('cached', 'Cached data, syncing…');
   } else {
     setStatus('loading', 'Connecting to sheet…');
   }
@@ -197,7 +197,7 @@ document.addEventListener('DOMContentLoaded', () => {
     .then(data => { _saveCache(data); applySheetData(data); logEvent(scriptUrl, 'session_start', null); })
     .catch(err => {
       if (cached) {
-        setStatus('cached', 'Sheet unreachable — showing cached data');
+        setStatus('cached', 'Sheet unreachable, showing cached data');
       } else {
         setStatus('error', `Could not reach sheet: ${err.message}`);
       }
@@ -380,7 +380,7 @@ function recompute(teamId) {
     : state.selectedResults[teamId];
 }
 
-/** Returns the active criteria order for a team — filtered by the global criteria filter when on. */
+/** Returns the active criteria order for a team: filtered by the global criteria filter when on. */
 function _activeCriteriaOrder(teamId) {
   const team     = state.teams[teamId];
   const filterEl = document.getElementById('combined-calc-criteria');
@@ -477,10 +477,10 @@ function renderCriteriaList(teamId) {
 
     let weightPct;
     if (filterActive && !isChecked) {
-      weightPct = '—';
+      weightPct = '-';
     } else if (filterActive && activeOrder) {
       const ai = activeOrder.indexOf(criterionId);
-      weightPct = ai >= 0 ? (activeWeights[ai] * 100).toFixed(1) + '%' : '—';
+      weightPct = ai >= 0 ? (activeWeights[ai] * 100).toFixed(1) + '%' : '-';
     } else {
       weightPct = weights[idx] !== undefined ? (weights[idx] * 100).toFixed(1) + '%' : '';
     }
@@ -562,8 +562,8 @@ function renderResults(teamId) {
 
   const rows = results.map(r => {
     const sel   = calcOnly ? selMap.get(r.id) : null;
-    const rank  = sel ? sel.rank              : (calcOnly ? '—' : r.rank);
-    const score = sel ? sel.score.toFixed(3)  : (calcOnly ? '—' : r.score.toFixed(3));
+    const rank  = sel ? sel.rank              : (calcOnly ? '-' : r.rank);
+    const score = sel ? sel.score.toFixed(3)  : (calcOnly ? '-' : r.score.toFixed(3));
     return `<tr class="${r.isSelected ? 'selected-alt' : ''}">
       <td class="rank-cell">${rank}</td>
       <td class="id-cell">${escHtml(r.id)}</td>
@@ -620,7 +620,7 @@ function renderCombinedChart() {
   const canvas = document.getElementById('combined-chart');
   if (!canvas || typeof Chart === 'undefined') return;
 
-  // Consensus results — computed using the shared combined criteria order
+  // Consensus results: computed using the shared combined criteria order
   const combined = _activeResults('combined');
   if (!combined.length) { _destroyChart(canvas); return; }
 
@@ -652,7 +652,7 @@ function renderCombinedChart() {
   _renderBarChart(canvas, combined, _cssVar('--combined'), { extraDatasets, showLegend: extraDatasets.length > 0 });
 }
 
-/** Spider chart for the combined panel — used by Consensus and Copeland modes. */
+/** Spider chart for the combined panel: used by Consensus and Copeland modes. */
 function _renderCombinedSpiderChart(displayIds) {
   const wrap = document.getElementById('combined-spider-wrap');
   if (!wrap || wrap.hidden) return;
@@ -680,7 +680,7 @@ function _renderCombinedSpiderChart(displayIds) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Combined panel — mode dispatcher + per-mode renderers
+// Combined panel: mode dispatcher + per-mode renderers
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** Master entry point for the combined panel; routes to the active mode renderer. */
@@ -729,7 +729,7 @@ function renderConsensusTable() {
 
 /**
  * Compute Copeland pairwise vote between two results arrays.
- * Pure JS — no Pyodide required.
+ * Pure JS: no Pyodide required.
  * @param {Array<{id,description,rank}>} r1
  * @param {Array<{id,description,rank}>} r2
  * @returns {Array<{id,description,copelandScore,score,rank,isSelected}>}
@@ -805,7 +805,7 @@ function renderCopelandPanel() {
     }
   }
 
-  // Pairwise matrix — shown in the "Table" view slot
+  // Pairwise matrix: shown in the "Table" view slot
   const tableWrap = document.getElementById('combined-criteria-table-wrap');
   if (tableWrap && !tableWrap.hidden) _renderPairwiseMatrix(copeland, r1, r2);
 }
@@ -820,7 +820,7 @@ function _renderPairwiseMatrix(copeland, r1, r2) {
   const thead = `<thead><tr><th></th>${ids.map(id => `<th title="${escHtml(id)}">${escHtml(id)}</th>`).join('')}</tr></thead>`;
   const tbody = `<tbody>${ids.map(id => {
     const cells = ids.map(other => {
-      if (id === other) return `<td class="pairwise-cell-self">—</td>`;
+      if (id === other) return `<td class="pairwise-cell-self">./td>`;
       let winsA = 0, winsB = 0;
       for (const res of [r1, r2]) {
         const ra = rankOf(res, id), rb = rankOf(res, other);
@@ -1285,7 +1285,7 @@ function _renderBarChart(canvas, results, color, opts = {}) {
     ? (r.isOwn ? solid : otherOpacity)
     : (r.isSelected ? solid : faintBorder);
 
-  // Fixed px per bar — same value for all charts so bars are always identical size
+  // Fixed px per bar: same value for all charts so bars are always identical size
   const BAR_PX    = 13;
   const AXIS_PX   = 36;
   const LEGEND_PX = showLegend ? 24 : 0;
@@ -1416,7 +1416,7 @@ function _buildCriteriaTableHTML(rows, orderedCriteria, scoreLabel) {
       const idx = state.criteria.findIndex(c => c.id === crit.id);
       const v   = alt?.values[idx] ?? null;
       const bg  = v != null ? _heatmapColor(v, colStats[ci].min, colStats[ci].max, crit.type) : 'var(--surface2)';
-      return `<td class="cvt-cell" style="background:${bg}" title="${escHtml(crit.id)}: ${v != null ? v : '—'}">${v != null ? v : '—'}</td>`;
+      return `<td class="cvt-cell" style="background:${bg}" title="${escHtml(crit.id)}: ${v != null ? v : '-'}">${v != null ? v : '-'}</td>`;
     }).join('');
     const rowTitle = ` title="${escHtml(r.id)}: ${escHtml(r.description)}"`;
     return `<tr class="${r.isSelected ? 'selected-alt' : ''}"${rowTitle}><td class="cvt-rank">${r.rank}</td><td class="cvt-id">${escHtml(r.id)}</td><td class="cvt-score">${r.score.toFixed(3)}</td>${cells}</tr>`;
@@ -1505,7 +1505,7 @@ function _renderSpiderChart(canvas, displayIds, orderedCriteria, colStats, palet
               const idx  = state.criteria.findIndex(c => c.id === crit?.id);
               const raw  = alt?.values[idx];
               const norm = ctx.parsed.r?.toFixed(2);
-              return ` ${id} — ${crit?.shortName || crit?.id}: ${raw != null ? raw : 'N/A'} (norm ${norm})`;
+              return ` ${id}: ${crit?.shortName || crit?.id}: ${raw != null ? raw : 'N/A'} (norm ${norm})`;
             }
           }
         }
@@ -1597,13 +1597,13 @@ function wireGlobalButtons() {
     }
   });
 
-  // Save ranking buttons — delegated so dynamically-rendered buttons are covered
+  // Save ranking buttons: delegated so dynamically-rendered buttons are covered
   document.addEventListener('click', e => {
     const btn = e.target.closest('.btn-save-ranking[data-team]');
     if (btn) saveRanking(btn.dataset.team);
   });
 
-  // Shared p-value slider — affects both teams
+  // Shared p-value slider: affects both teams
   const sharedSlider = document.getElementById('shared-p-slider');
   sharedSlider?.addEventListener('input', () => {
     state.p = parseFloat(sharedSlider.value);
@@ -1614,7 +1614,7 @@ function wireGlobalButtons() {
     logEvent(state.scriptUrl, 'p_value_changed', null, { p: state.p });
   });
 
-  // Shared method tabs — affects both teams
+  // Shared method tabs: affects both teams
   document.querySelectorAll('#shared-method-tabs .method-tab').forEach(btn => {
     btn.addEventListener('click', () => {
       state.method = btn.dataset.method;
@@ -1689,7 +1689,7 @@ function wireGlobalButtons() {
       renderCombinedPanel();
     }
 
-    // "Calculate selected criteria only" toggle — global filter, re-render everything
+    // "Calculate selected criteria only" toggle: global filter, re-render everything
     if (e.target.classList.contains('calc-criteria-checkbox')) {
       _invalidateSensitivity();
       for (const teamId of TEAMS) {
@@ -1734,7 +1734,7 @@ function wireGlobalButtons() {
     renderSnapshotsList();
   });
 
-  // Snapshots list — load or delete (event delegation)
+  // Snapshots list: load or delete (event delegation)
   document.getElementById('snapshots-list')?.addEventListener('click', e => {
     const loadBtn   = e.target.closest('.snapshot-load');
     const deleteBtn = e.target.closest('.snapshot-delete');
@@ -1828,7 +1828,7 @@ function startPolling() {
       setStatus('loading', 'Resuming sync…');
       fetchSheetData(state.scriptUrl)
         .then(data => { _saveCache(data); applySheetData(data); })
-        .catch(() => setStatus('offline', 'Sheet unreachable — working offline'));
+        .catch(() => setStatus('offline', 'Sheet unreachable, working offline'));
     } else {
       setStatus('offline', 'Auto-sync paused');
     }
@@ -1847,7 +1847,7 @@ function startPolling() {
       }
       setStatus('ok', '');
     } catch {
-      setStatus('offline', 'Sheet unreachable — working offline');
+      setStatus('offline', 'Sheet unreachable, working offline');
     } finally {
       state.isSyncing = false;
     }
@@ -1878,7 +1878,7 @@ function setStatus(type, message) {
 function _saveCache(data) {
   try {
     localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), data }));
-  } catch { /* quota exceeded — ignore */ }
+  } catch { /* quota exceeded: ignore */ }
 }
 
 function _loadCache() {
@@ -2069,14 +2069,14 @@ function _hexToRgba(hex, alpha) {
  * Rules are ordered: more-specific patterns before generic ones.
  * Returns '' (empty string) if no rule matches.
  *
- * This is the single source of truth for criterion icons — used in table
+ * This is the single source of truth for criterion icons: used in table
  * headers, the criteria priority list, spider chart axis labels, and any
  * tooltips, so the icon↔criterion connection is always consistent.
  */
 function _criterionIcon(criterion) {
   const text = `${criterion.name ?? ''} ${criterion.shortName ?? ''}`.toLowerCase();
   const rules = [
-    // Navigability — size-specific before generic (big ship > ferry > sailboat)
+    // Navigability: size-specific before generic (big ship > ferry > sailboat)
     [/navigab.*(big|large)|(big|large).*vessel/,    '🚢'],
     [/navigab.*medium|medium.*vessel/,               '⛴️'],
     [/navigab.*(small)|small.*vessel/,               '⛵'],
@@ -2085,11 +2085,11 @@ function _criterionIcon(criterion) {
     [/energy|power|electricity|hydropower|gwh/,      '⚡'],
     // Birds / wildlife
     [/bird/,                                         '🐦'],
-    // Food production — location before generic
+    // Food production: location before generic
     [/food.*(down|downstream)|downstream.*food/,     '🌽🏞️'],
     [/food.*(up|upstream)|upstream.*food/,           '🌽🏔️'],
     [/food|crop|agricult|irrigat|maize|grain/,       '🌽'],
-    // Evaporation — location before generic
+    // Evaporation: location before generic
     [/evap.*(down|downstream)|downstream.*evap/,     '☀️🏞️'],
     [/evap.*(up|upstream)|upstream.*evap/,           '☀️🏔️'],
     [/wetland.*evap|evap.*wetland/,                  '🌿☀️'],

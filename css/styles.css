@@ -1,12 +1,12 @@
 /* ──────────────────────────────────────────────────────────────────────────
-   Design tokens — exact IHE Delft brand palette
+   Design tokens: exact IHE Delft brand palette
    Source: un-ihe.org computed stylesheet (April 2026)
 
    IHE Delft source variables (preserved for reference):
-     --color--blue-100: #151f37   (dark navy — their primary text/bg)
+     --color--blue-100: #151f37   (dark navy: their primary text/bg)
      --color--blue-300: #0d0f9f   (deep indigo)
-     --color--blue-400: #0040d5   (medium blue — their links)
-     --color--blue-600: #2ea0ed   (Picton Blue — their primary accent)
+     --color--blue-400: #0040d5   (medium blue: their links)
+     --color--blue-600: #2ea0ed   (Picton Blue: their primary accent)
      --color--blue-900: #eaf5fd   (very light blue tint)
      --color--green-400: #3abf8f  (green accent)
      --color--yellow-400: #fedc53 (warning)
@@ -16,7 +16,7 @@
      --color--border: rgba(46,160,237,0.1)
    ────────────────────────────────────────────────────────────────────────── */
 :root {
-  /* Backgrounds — built from IHE's navy (#151f37) darkened for dashboard use */
+  /* Backgrounds: built from IHE's navy (#151f37) darkened for dashboard use */
   --bg:          #0c111e;   /* deep navy, derived from --color--blue-100 */
   --surface:     #151f37;   /* IHE --color--bg-secondary exactly */
   --surface2:    #1c2a4a;   /* lighter layer above surface */
@@ -27,32 +27,32 @@
   --text-muted:  #8aabcc;
   --text-dim:    #4a6a8a;
 
-  /* IHE Delft brand colors — exact values from their stylesheet */
+  /* IHE Delft brand colors: exact values from their stylesheet */
   --ihe-blue:      #2ea0ed;            /* --color--blue-600 */
-  --ihe-blue-dark: #0040d5;            /* --color--blue-400 — their link/hover color */
+  --ihe-blue-dark: #0040d5;            /* --color--blue-400: their link/hover color */
   --ihe-blue-glow: rgba(46,160,237,0.1); /* --color--blue-600--rgba-10 */
   --ihe-navy:      #151f37;            /* --color--blue-100 / --color--bg-secondary */
   --ihe-navy-deep: #0d0f9f;            /* --color--blue-300 / --color--bg-tertiary */
 
-  /* Team accent colors — both sourced from IHE palette */
-  --team1:       #2ea0ed;              /* Upper Basin — --color--blue-600 */
+  /* Team accent colors: both sourced from IHE palette */
+  --team1:       #2ea0ed;              /* Upper Basin: --color--blue-600 */
   --team1-dark:  #0040d5;              /* --color--blue-400 */
   --team1-glow:  rgba(46,160,237,0.12);
-  --team2:       #3abf8f;              /* Lower Basin — --color--green-400 */
+  --team2:       #3abf8f;              /* Lower Basin: --color--green-400 */
   --team2-dark:  #2a9970;
   --team2-glow:  rgba(58,191,143,0.12);
 
-  /* Combined ranking — amber/gold, distinct from both team colors */
+  /* Combined ranking: amber/gold, distinct from both team colors */
   --combined:      #f59e0b;
   --combined-glow: rgba(245,158,11,0.12);
 
-  /* Status — IHE exact values */
+  /* Status: IHE exact values */
   --ok:          #3abf8f;   /* --color--success / --color--green-400 */
   --warn:        #fedc53;   /* --color--warning / --color--yellow-400 */
   --error:       #dc3545;   /* --color--error   / --color--red-400   */
   --info:        #2ea0ed;   /* --color--blue-600 */
 
-  /* Fonts — IHE Delft typefaces */
+  /* Fonts: IHE Delft typefaces */
   --font-body:   'PT Serif', 'PT Serif-fallback', Georgia, serif;
   --font-ui:     'Poppins', 'Poppins-fallback', system-ui, sans-serif;
 
@@ -179,7 +179,7 @@ ul { list-style: none; }
 }
 .btn-icon-sm:hover { color: var(--text); background: var(--surface2); }
 
-/* Landing page theme toggle — fixed top-right corner */
+/* Landing page theme toggle: fixed top-right corner */
 .theme-toggle-landing {
   position: fixed;
   top: 1rem;
@@ -431,7 +431,7 @@ ul { list-style: none; }
 .setup-note-tip strong { color: var(--ihe-blue); }
 
 /* ──────────────────────────────────────────────────────────────────────────
-   App layout — header
+   App layout: header
    ────────────────────────────────────────────────────────────────────────── */
 .app-header {
   background: var(--ihe-navy);
@@ -510,7 +510,7 @@ ul { list-style: none; }
 .header-right .btn-secondary:hover { border-color: var(--ihe-blue); color: #fff; }
 
 /* ──────────────────────────────────────────────────────────────────────────
-   App layout — responsive main grid
+   App layout: responsive main grid
    ────────────────────────────────────────────────────────────────────────── */
 
 /*
@@ -667,7 +667,7 @@ ul { list-style: none; }
 .btn-view-icon.active { opacity: 1; background: var(--surface2); }
 
 /* ──────────────────────────────────────────────────────────────────────────
-   Criteria-values heatmap table — compact block-cell design
+   Criteria-values heatmap table: compact block-cell design
    Cells are pure color blocks; values shown in browser tooltip (title attr).
    ────────────────────────────────────────────────────────────────────────── */
 .criteria-table-wrap { overflow-x: auto; }
@@ -691,7 +691,7 @@ ul { list-style: none; }
   cursor: default;
 }
 
-/* ID column — all rows */
+/* ID column: all rows */
 .criteria-values-table .cvt-rank {
   color: var(--text-muted);
   font-size: .62rem;
@@ -932,7 +932,7 @@ ul { list-style: none; }
   line-height: 1.5;
 }
 
-/* p-slider — used only in shared settings; thumb styled via .shared-slider override below */
+/* p-slider: used only in shared settings; thumb styled via .shared-slider override below */
 .p-slider {
   width: 100%;
   -webkit-appearance: none;
@@ -1160,13 +1160,13 @@ ul { list-style: none; }
 /* Ensure the method tabs always have room for all four labels */
 #shared-method-tabs { min-width: 220px; }
 
-/* Shared p-slider thumb — amber/combined color */
+/* Shared p-slider thumb: amber/combined color */
 .shared-slider::-webkit-slider-thumb {
   background:  var(--combined);
   box-shadow:  0 0 0 2px var(--combined);
 }
 
-/* Shared method tabs — amber active state */
+/* Shared method tabs: amber active state */
 #shared-method-tabs .method-tab.active {
   background: var(--combined);
   color: #fff;
@@ -1213,8 +1213,8 @@ ul { list-style: none; }
 @media (min-width: 1200px) {
   /*
    * Row 1: charts (unchanged)
-   * Row 2: t1-crit(4) com-crit(4) t2-crit(4)  — criteria priority across all three
-   * Row 3: t1-res(4)  com-res(4)  t2-res(4)   — ranked alternatives across all three
+   * Row 2: t1-crit(4) com-crit(4) t2-crit(4) : criteria priority across all three
+   * Row 3: t1-res(4)  com-res(4)  t2-res(4)  : ranked alternatives across all three
    */
   .main-grid--mode-consensus {
     grid-template-columns: repeat(12, 1fr);

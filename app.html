@@ -22,8 +22,8 @@
       <details class="method-info">
         <summary class="method-info-icon">ℹ</summary>
         <div class="method-info-panel">
-          <p>This tool supports group decision-making across two teams using Multi-Criteria Decision Analysis (MCDA). Each team independently ranks criteria by importance and selects preferred alternatives — the combined view shows where teams agree and where they differ.</p>
-          <p class="hint">The goal is to help teams collaborate — by making values and trade-offs explicit, decisions become better informed and more transparent.</p>
+          <p>This tool supports group decision-making across two teams using Multi-Criteria Decision Analysis (MCDA). Each team independently ranks criteria by importance and selects preferred alternatives, the combined view shows where teams agree and where they differ.</p>
+          <p class="hint">The goal is to help teams collaborate by making values and trade-offs explicit, decisions become better informed and more transparent.</p>
         </div>
       </details>
       <span id="sync-dot" class="sync-dot loading" title="Connecting…"></span>
@@ -62,11 +62,11 @@
             <div class="method-info-panel">
               <p style="margin:0 0 .5rem">Controls how strongly criteria priority order affects weights: <em>w<sub>i</sub> = (n − r<sub>i</sub> + 1)<sup>p</sup> / Σ(n − r<sub>j</sub> + 1)<sup>p</sup></em></p>
               <dl>
-                <dt>p = 0 — Equal weights</dt>
+                <dt>p = 0: Equal weights</dt>
                 <dd>All criteria weighted equally; priority order ignored.</dd>
-                <dt>p = 0.5 — Moderate priority</dt>
+                <dt>p = 0.5: Moderate priority</dt>
                 <dd>Weights decay gradually; top criteria somewhat favoured.</dd>
-                <dt>p = 1 — Linear priority</dt>
+                <dt>p = 1: Linear priority</dt>
                 <dd>Weights decrease linearly with rank.</dd>
               </dl>
             </div>
@@ -136,7 +136,7 @@
   -->
   <div class="main-grid">
 
-    <!-- ① Team 1 — chart (top-left on large screens) -->
+    <!-- ① Team 1: chart (top-left on large screens) -->
     <div class="team-panel team1" id="team1-chart-col">
       <div class="team-header">
         <h2 id="team1-name">Upper Basin</h2>
@@ -172,7 +172,7 @@
                   <dt>Consensus</dt>
                   <dd>One agreed-upon criteria order runs the MCDM jointly. Gives a single ranking but can mask real team disagreement.</dd>
                   <dt>Copeland</dt>
-                  <dd>Each team ranks with their own weights. Results are combined by pairwise vote — the alternative preferred by more teams wins each head-to-head. "Table" view shows the full pairwise matrix.</dd>
+                  <dd>Each team ranks with their own weights. Results are combined by pairwise vote; the alternative preferred by more teams wins each head-to-head. "Table" view shows the full pairwise matrix.</dd>
                   <dt>Sensitivity</dt>
                   <dd>Interpolates between the two teams' weight vectors and re-runs the MCDM across the full range. Identifies "flip points" where the top alternative changes.</dd>
                 </dl>
@@ -239,7 +239,7 @@
             <summary class="method-info-icon">?</summary>
             <div class="method-info-panel">
               <p>Drag criteria to agree on a shared priority order for the consensus calculation.</p>
-              <p class="hint">Look for criteria where both teams ranked similarly — these are natural anchors. For disputed criteria, consider splitting the difference in rank, or discussing whether the disagreement reflects a genuine values conflict worth surfacing.</p>
+              <p class="hint">Look for criteria where both teams ranked similarly; these are natural anchors. For disputed criteria, consider splitting the difference in rank, or discussing whether the disagreement reflects a genuine values conflict worth surfacing.</p>
             </div>
           </details>
         </div>
@@ -255,7 +255,7 @@
       </section>
     </div>
 
-    <!-- ③ Team 2 — chart (top-right on large screens) -->
+    <!-- ③ Team 2: chart (top-right on large screens) -->
     <div class="team-panel team2" id="team2-chart-col">
       <div class="team-header">
         <h2 id="team2-name">Lower Basin</h2>
@@ -275,7 +275,7 @@
       <div class="criteria-table-wrap" id="team2-criteria-table-wrap" hidden></div>
     </div>
 
-    <!-- ④ Team 1 — criteria (bottom-left-1 on large screens) -->
+    <!-- ④ Team 1: criteria (bottom-left-1 on large screens) -->
     <div class="team-col team1" id="team1-criteria-col">
       <section class="panel-section">
         <div class="section-title">
@@ -284,8 +284,8 @@
             <summary class="method-info-icon">?</summary>
             <div class="method-info-panel">
               <p>Drag criteria up or down to reflect what matters most to your community. Rank 1 carries the most weight.</p>
-              <p>Priority only affects the results if you set the Weight Exponent above zero — at p = 0 all criteria are equal regardless of order.</p>
-              <p class="hint">Consider criteria that represent long-term or irreversible consequences — environmental degradation and ecosystem loss often unfold slowly but cannot easily be undone. Also consider whose voices may not be fully represented in the data: downstream communities, future generations, or groups with less political influence.</p>
+              <p>Priority only affects the results if you set the Weight Exponent above zero (at p = 0 all criteria are equal regardless of order).</p>
+              <p class="hint">Consider criteria that represent long-term or irreversible consequences: environmental degradation and ecosystem loss often unfold slowly but cannot easily be undone. Also consider whose voices may not be fully represented in the data: downstream communities, future generations, or groups with less political influence.</p>
             </div>
           </details>
         </div>
@@ -293,7 +293,7 @@
       </section>
     </div>
 
-    <!-- ⑤ Team 1 — results (bottom-left-2 on large screens) -->
+    <!-- ⑤ Team 1: results (bottom-left-2 on large screens) -->
     <div class="team-col team1" id="team1-results-col">
       <section class="panel-section">
         <div class="section-title">
@@ -310,7 +310,7 @@
       </section>
     </div>
 
-    <!-- ⑥ Team 2 — criteria (bottom-right-1 on large screens) -->
+    <!-- ⑥ Team 2: criteria (bottom-right-1 on large screens) -->
     <div class="team-col team2" id="team2-criteria-col">
       <section class="panel-section">
         <div class="section-title">
@@ -319,8 +319,8 @@
             <summary class="method-info-icon">?</summary>
             <div class="method-info-panel">
               <p>Drag criteria up or down to reflect what matters most to your community. Rank 1 carries the most weight.</p>
-              <p>Priority only affects the results if you set the Weight Exponent above zero — at p = 0 all criteria are equal regardless of order.</p>
-              <p class="hint">Consider criteria that represent long-term or irreversible consequences — environmental degradation and ecosystem loss often unfold slowly but cannot easily be undone. Also consider whose voices may not be fully represented in the data: downstream communities, future generations, or groups with less political influence.</p>
+              <p>Priority only affects the results if you set the Weight Exponent above zero (at p = 0 all criteria are equal regardless of order).</p>
+              <p class="hint">Consider criteria that represent long-term or irreversible consequences: environmental degradation and ecosystem loss often unfold slowly but cannot easily be undone. Also consider whose voices may not be fully represented in the data: downstream communities, future generations, or groups with less political influence.</p>
             </div>
           </details>
         </div>
@@ -328,7 +328,7 @@
       </section>
     </div>
 
-    <!-- ⑦ Team 2 — results (bottom-right-2 on large screens) -->
+    <!-- ⑦ Team 2: results (bottom-right-2 on large screens) -->
     <div class="team-col team2" id="team2-results-col">
       <section class="panel-section">
         <div class="section-title">

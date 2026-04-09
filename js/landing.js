@@ -1,5 +1,5 @@
 /**
- * landing.js — Controller for index.html (the landing / connection page).
+ * landing.js: Controller for index.html (the landing / connection page).
  *
  * Handles:
  *   - Launching the app with an Apps Script URL
@@ -15,7 +15,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Show error banner if redirected here with ?error=
   const params = new URLSearchParams(window.location.search);
   if (params.get('error') === 'no_url') {
-    showBanner('No sheet URL found — please connect a sheet or load a CSV file.', 'warn');
+    showBanner('No sheet URL found; please connect a sheet or load a CSV file.', 'warn');
   }
 
   // If there is an existing connection, offer to resume it
@@ -79,7 +79,7 @@ document.addEventListener('DOMContentLoaded', () => {
     reader.readAsText(file);
   });
 
-  // Download Template is a plain <a download> link — no JS handler needed.
+  // Download Template is a plain <a download> link: no JS handler needed.
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

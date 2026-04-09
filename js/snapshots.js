@@ -1,12 +1,12 @@
 /**
- * snapshots.js — Snapshot save / load / merge.
+ * snapshots.js: Snapshot save / load / merge.
  *
  * Snapshots capture the full decision state (both teams' criteria order,
  * settings, and computed results) at a moment in time.
  *
  * Storage strategy:
- *   Primary   — browser localStorage  (survives page refresh, private to device)
- *   Secondary — Google Sheet           (shared, requires scriptUrl)
+ *   Primary  : browser localStorage  (survives page refresh, private to device)
+ *   Secondary: Google Sheet           (shared, requires scriptUrl)
  *
  * Sheet pushes are best-effort: a failure logs a warning but does not
  * prevent the local save from succeeding.

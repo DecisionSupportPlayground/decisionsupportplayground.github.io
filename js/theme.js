@@ -1,5 +1,5 @@
 /**
- * theme.js — Light/dark theme toggle, shared by app.js and landing.js.
+ * theme.js: Light/dark theme toggle, shared by app.js and landing.js.
  *
  * Call initTheme() once in DOMContentLoaded.
  * The saved preference is applied immediately via the module-level IIFE so

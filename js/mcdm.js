@@ -1,5 +1,5 @@
 /**
- * mcdm.js — Multi-Criteria Decision Making algorithms backed by pymcdm via Pyodide.
+ * mcdm.js: Multi-Criteria Decision Making algorithms backed by pymcdm via Pyodide.
  *
  * Usage:
  *   import { initMCDM, topsis, saw, mabac, aras,
@@ -36,7 +36,7 @@ let _py = null;
 /**
  * Load and initialise the Pyodide + pymcdm engine.
  * Must be awaited once before calling any algorithm function.
- * Safe to call multiple times — subsequent calls resolve immediately.
+ * Safe to call multiple times: subsequent calls resolve immediately.
  *
  * @returns {Promise<void>}
  */
@@ -106,7 +106,7 @@ _methods = {
 
 function _call(name, matrix, weights, types) {
   if (!_py) {
-    throw new Error('MCDM engine not initialised — call initMCDM() first');
+    throw new Error('MCDM engine not initialised; call initMCDM() first');
   }
   _py.globals.set('_matrix',  _py.toPy(matrix));
   _py.globals.set('_weights', _py.toPy(weights));
@@ -141,7 +141,7 @@ export const METHODS = { saw, topsis, mabac, aras };
  * @param {number[][]} matrix
  * @param {number[]}   weights
  * @param {number[]}   types
- * @returns {number[]}  Scores — higher is better.
+ * @returns {number[]}  Scores: higher is better.
  * @throws {Error} for unknown method names.
  */
 export function runMethod(name, matrix, weights, types) {
