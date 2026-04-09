@@ -75,7 +75,7 @@ function doGet(e) {
  * Handles POST requests.
  *
  * Expected body (JSON string):
- *   { action: 'saveRankings',  team: 'team1'|'team2',  rankings: {...} }
+ *   { action: 'saveRankings',  team: 'team1'|'team2'|'combined',  rankings: {...} }
  *   { action: 'saveSnapshot',  snapshot: { id, name, timestamp, state } }
  *   { action: 'deleteSnapshot', id: 'snap_...' }
  */

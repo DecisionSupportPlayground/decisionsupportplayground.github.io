@@ -52,14 +52,19 @@ const state = {
   alternatives: [],   // [{id, description, values[]}]
   p:            0,    // shared weight exponent: 0 | 0.5 | 1
   method:       'topsis', // shared MCDM method
+  combinedMode: 'copeland', // 'consensus' | 'copeland' | 'sensitivity'
   teams: {
-    team1: { ...DEFAULT_TEAM, name: 'Upper Basin' },
-    team2: { ...DEFAULT_TEAM, name: 'Lower Basin' }
+    team1:    { ...DEFAULT_TEAM, name: 'Upper Basin' },
+    team2:    { ...DEFAULT_TEAM, name: 'Lower Basin' },
+    combined: { ...DEFAULT_TEAM, name: 'Consensus' }
   },
-  results:                       { team1: [], team2: [] },
-  selectedResults:               { team1: [], team2: [] }, // recalculated using selected alts only
-  criteriaFilteredResults:       { team1: [], team2: [] }, // recalculated using selected criteria only
-  criteriaFilteredSelResults:    { team1: [], team2: [] }, // both filters applied
+  results:                       { team1: [], team2: [], combined: [] },
+  selectedResults:               { team1: [], team2: [], combined: [] },
+  criteriaFilteredResults:       { team1: [], team2: [], combined: [] },
+  criteriaFilteredSelResults:    { team1: [], team2: [], combined: [] },
+  sensitivityCache:    null,   // { steps, altIds, ranks, flipPoints, summary, weightDiff } | null
+  sensitivityRunning:  false,
+  sensitivityGen:      0,      // incremented on every invalidation to cancel in-flight computations
   snapshots:       [],
   activeSnapshot:  null,
   lastModified:    null,
@@ -85,6 +90,8 @@ document.addEventListener('DOMContentLoaded', () => {
   state.snapshots = loadLocalSnapshots();
 
   wireGlobalButtons();
+  const _savedMode = (() => { try { return localStorage.getItem('madm_combined_mode'); } catch { return null; } })();
+  if (_savedMode) _applyMode(_savedMode);
   initTheme(() => renderAllPanels());
   renderAllPanels();
 
@@ -166,6 +173,9 @@ document.addEventListener('DOMContentLoaded', () => {
           state.teams[teamId].criteriaOrder = state.criteria.map(c => c.id);
         }
       }
+      if (!state.teams.combined.criteriaOrder.length) {
+        state.teams.combined.criteriaOrder = state.criteria.map(c => c.id);
+      }
       recomputeAll();
       renderAllPanels();
     } catch (err) {
@@ -243,6 +253,10 @@ function applySheetData(data) {
         if (nameEl) nameEl.textContent = r.teamName;
       }
     }
+    // Load saved consensus criteria order
+    if (rankData.combined?.criteriaOrder?.length) {
+      state.teams.combined.criteriaOrder = rankData.combined.criteriaOrder;
+    }
   }
 
   // Snapshots
@@ -257,6 +271,16 @@ function applySheetData(data) {
       state.teams[teamId].criteriaOrder = state.criteria.map(c => c.id);
     }
   }
+  // Seed selections to all alternatives if none saved (first load or fresh sheet)
+  for (const teamId of TEAMS) {
+    if (!state.teams[teamId].isDirty && !state.teams[teamId].selections.length && state.alternatives.length) {
+      state.teams[teamId].selections = state.alternatives.map(a => a.id);
+    }
+  }
+  // Seed combined criteria order from sheet column order (neutral baseline)
+  if (!state.teams.combined.criteriaOrder.length && state.criteria.length) {
+    state.teams.combined.criteriaOrder = state.criteria.map(c => c.id);
+  }
 
   state.lastModified = data.lastModified || null;
   recomputeAll();
@@ -268,9 +292,17 @@ function applySheetData(data) {
 // MCDM computation
 // ─────────────────────────────────────────────────────────────────────────────
 
+function _invalidateSensitivity() {
+  state.sensitivityCache  = null;
+  state.sensitivityRunning = false;
+  state.sensitivityGen++;
+}
+
 function recomputeAll() {
   recompute('team1');
   recompute('team2');
+  if (state.combinedMode === 'consensus') recompute('combined');
+  _invalidateSensitivity();
 }
 
 function _computeResults(alts, teamId, criteriaOrderOverride = null) {
@@ -348,29 +380,23 @@ function recompute(teamId) {
     : state.selectedResults[teamId];
 }
 
-/** Returns the active criteria order for a team — filtered when "calc criteria" is on.
- *  Pass checkCombined=true from combined renders so the combined-calc-criteria checkbox is also honoured. */
-function _activeCriteriaOrder(teamId, checkCombined = false) {
-  const team          = state.teams[teamId];
-  const filterEl      = document.getElementById(`${teamId}-calc-criteria`);
-  const combinedEl    = checkCombined ? document.getElementById('combined-calc-criteria') : null;
-  if ((filterEl?.checked || combinedEl?.checked) && team.criteriaSelections.length > 0) {
+/** Returns the active criteria order for a team — filtered by the global criteria filter when on. */
+function _activeCriteriaOrder(teamId) {
+  const team     = state.teams[teamId];
+  const filterEl = document.getElementById('combined-calc-criteria');
+  if (filterEl?.checked && team.criteriaSelections.length > 0) {
     return team.criteriaOrder.filter(id => team.criteriaSelections.includes(id));
   }
   return team.criteriaOrder;
 }
 
-/** Returns the appropriate results array based on which filter checkboxes are active.
- *  Pass checkCombined=true from combined renders so combined-level checkboxes are also honoured. */
-function _activeResults(teamId, checkCombined = false) {
-  const calcAltEl     = document.getElementById(`${teamId}-calc-selected`);
-  const combinedAltEl = document.getElementById('combined-calc-selected');
-  const calcCritEl    = document.getElementById(`${teamId}-calc-criteria`);
-  const combinedCritEl = checkCombined ? document.getElementById('combined-calc-criteria') : null;
+/** Returns the appropriate results array based on which global filter checkboxes are active. */
+function _activeResults(teamId) {
+  const altEl  = document.getElementById('combined-calc-selected');
+  const critEl = document.getElementById('combined-calc-criteria');
 
-  const useAlt  = (calcAltEl?.checked || combinedAltEl?.checked);
-  const useCrit = (calcCritEl?.checked || combinedCritEl?.checked) &&
-                  state.teams[teamId].criteriaSelections.length > 0;
+  const useAlt  = altEl?.checked;
+  const useCrit = critEl?.checked && state.teams[teamId].criteriaSelections.length > 0;
 
   if (useCrit && useAlt && state.criteriaFilteredSelResults[teamId]?.length > 0) {
     return state.criteriaFilteredSelResults[teamId];
@@ -391,9 +417,7 @@ function _activeResults(teamId, checkCombined = false) {
 function renderAllPanels() {
   renderSharedSettings();
   for (const teamId of TEAMS) renderPanel(teamId);
-  renderCombinedChart();
-  renderCombinedSpiderChart();
-  renderCombinedTable();
+  renderCombinedPanel();
   renderSnapshotsList();
 }
 
@@ -406,12 +430,14 @@ function renderPanel(teamId) {
 }
 
 function renderCriteriaList(teamId) {
-  const team = state.teams[teamId];
-  const listEl = document.getElementById(`${teamId}-criteria-list`);
-  if (!listEl) return;
+  const wrap = document.getElementById(`${teamId}-criteria-wrap`);
+  if (!wrap) return;
 
-  // Maintain current Sortable instance
-  if (listEl._sortable) { listEl._sortable.destroy(); }
+  const team = state.teams[teamId];
+
+  // Destroy existing Sortable before replacing DOM
+  const oldList = wrap.querySelector('.criteria-list');
+  if (oldList?._sortable) oldList._sortable.destroy();
 
   // Compute weights for the current order and the shared p-value
   const n = team.criteriaOrder.length;
@@ -424,16 +450,18 @@ function renderCriteriaList(teamId) {
     team.criteriaSelections = [...team.criteriaOrder];
   }
 
-  const filterActive     = document.getElementById(`${teamId}-calc-criteria`)?.checked ?? false;
-  // Weights for the active (possibly filtered) criteria order
-  const activeOrder      = filterActive && team.criteriaSelections.length > 0
+  const filterActive  = document.getElementById('combined-calc-criteria')?.checked ?? false;
+  const activeOrder   = filterActive && team.criteriaSelections.length > 0
     ? team.criteriaOrder.filter(id => team.criteriaSelections.includes(id))
     : null;
-  const activeWeights    = activeOrder
+  const activeWeights = activeOrder
     ? rankOrderWeights(activeOrder.map((_, i) => i + 1), state.p)
     : null;
 
-  listEl.innerHTML = '';
+  // Build <ul>
+  const listEl = document.createElement('ul');
+  listEl.className = 'criteria-list';
+
   team.criteriaOrder.forEach((criterionId, idx) => {
     const c = state.criteria.find(x => x.id === criterionId);
     if (!c) return;
@@ -464,12 +492,22 @@ function renderCriteriaList(teamId) {
       <span class="criterion-weight">${escHtml(weightPct)}</span>
       <span class="criterion-type ${typeLabel}" title="${typeLabel}: ${typeLabel === 'benefit' ? 'the higher the better' : 'the higher the worst'}">${typeIcon}</span>
       <input type="checkbox" class="criterion-checkbox" data-team="${teamId}" data-id="${criterionId}"
-             title="Include in calculation" ${isChecked ? 'checked' : ''}>
-    `;
+             title="Include in calculation" ${isChecked ? 'checked' : ''}>`;
     listEl.appendChild(li);
   });
 
-  // Re-initialise SortableJS
+  // Build Save Ranking button
+  const btn = document.createElement('button');
+  btn.id        = `${teamId}-save-btn`;
+  btn.className = 'btn-save-ranking';
+  btn.dataset.team = teamId;
+  btn.style.marginTop = '.5rem';
+  btn.textContent = 'Save Ranking';
+
+  // Render into wrap
+  wrap.replaceChildren(listEl, btn);
+
+  // Initialise SortableJS
   listEl._sortable = Sortable.create(listEl, {
     animation:  150,
     handle:     '.drag-handle',
@@ -480,15 +518,13 @@ function renderCriteriaList(teamId) {
       state.teams[teamId].isDirty = true;
       logEvent(state.scriptUrl, 'criteria_reordered', teamId, { newOrder });
       recompute(teamId);
-      // Full re-render to update rank numbers and weights
+      _invalidateSensitivity();
       renderCriteriaList(teamId);
       renderResults(teamId);
       renderChart(teamId);
       renderCriteriaTable(teamId);
       renderSpiderChart(teamId);
-      renderCombinedChart();
-      renderCombinedSpiderChart();
-      renderCombinedTable();
+      renderCombinedPanel();
       updateDirtyIndicator(teamId);
     }
   });
@@ -516,34 +552,38 @@ function updateDirtyIndicator(teamId) {
 }
 
 function renderResults(teamId) {
-  const results = state.results[teamId] ?? [];
-  const tbody   = document.getElementById(`${teamId}-results-body`);
-  if (!tbody) return;
+  const wrap = document.getElementById(`${teamId}-results-wrap`);
+  if (!wrap) return;
 
-  const calcEl   = document.getElementById(`${teamId}-calc-selected`);
-  const combinedCalcEl = document.getElementById('combined-calc-selected');
-  const calcOnly = (calcEl?.checked || combinedCalcEl?.checked) && state.selectedResults[teamId].length > 0;
+  const results  = state.results[teamId] ?? [];
+  const calcEl   = document.getElementById('combined-calc-selected');
+  const calcOnly = calcEl?.checked && state.selectedResults[teamId].length > 0;
+  const selMap   = new Map(state.selectedResults[teamId].map(r => [r.id, r]));
 
-  // Build a lookup of recalculated rank/score for selected alts
-  const selMap = new Map(state.selectedResults[teamId].map(r => [r.id, r]));
-
-  tbody.innerHTML = results.map(r => {
-    const sel = calcOnly ? selMap.get(r.id) : null;
-    const rank  = sel ? sel.rank  : (calcOnly ? '—' : r.rank);
-    const score = sel ? sel.score.toFixed(3) : (calcOnly ? '—' : r.score.toFixed(3));
-    return `
-    <tr class="${r.isSelected ? 'selected-alt' : ''}">
+  const rows = results.map(r => {
+    const sel   = calcOnly ? selMap.get(r.id) : null;
+    const rank  = sel ? sel.rank              : (calcOnly ? '—' : r.rank);
+    const score = sel ? sel.score.toFixed(3)  : (calcOnly ? '—' : r.score.toFixed(3));
+    return `<tr class="${r.isSelected ? 'selected-alt' : ''}">
       <td class="rank-cell">${rank}</td>
       <td class="id-cell">${escHtml(r.id)}</td>
       <td class="desc-cell">${escHtml(r.description)}</td>
       <td class="score-cell">${score}</td>
-      <td class="sel-cell">
-        <input type="checkbox" class="alt-checkbox"
-               data-team="${teamId}" data-alt="${escHtml(r.id)}"
-               ${r.isSelected ? 'checked' : ''}>
-      </td>
+      <td class="sel-cell"><input type="checkbox" class="alt-checkbox"
+        data-team="${teamId}" data-alt="${escHtml(r.id)}" ${r.isSelected ? 'checked' : ''}></td>
     </tr>`;
   }).join('');
+
+  wrap.innerHTML = `<table class="results-table">
+    <thead><tr>
+      <th class="rank-cell">#</th>
+      <th class="id-cell">ID</th>
+      <th class="desc-cell">Description</th>
+      <th class="score-cell">Score</th>
+      <th class="sel-cell" title="Mark as selected">★</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
 }
 
 function renderChart(teamId) {
@@ -580,36 +620,16 @@ function renderCombinedChart() {
   const canvas = document.getElementById('combined-chart');
   if (!canvas || typeof Chart === 'undefined') return;
 
-  const r1 = _activeResults('team1', true);
-  const r2 = _activeResults('team2', true);
-  if (!r1.length && !r2.length) { _destroyChart(canvas); return; }
+  // Consensus results — computed using the shared combined criteria order
+  const combined = _activeResults('combined');
+  if (!combined.length) { _destroyChart(canvas); return; }
 
-  const hasT1   = r1.length > 0;
-  const hasT2   = r2.length > 0;
-  const divisor = (hasT1 ? 1 : 0) + (hasT2 ? 1 : 0);
+  // Per-team scores as secondary markers (computed with each team's own criteria)
+  const r1 = _activeResults('team1');
+  const r2 = _activeResults('team2');
+  const scoreMap1 = new Map(r1.map(r => [r.id, r.score]));
+  const scoreMap2 = new Map(r2.map(r => [r.id, r.score]));
 
-  const allIds  = [...new Set([...r1.map(r => r.id), ...r2.map(r => r.id)])];
-  const descMap = {};
-  for (const r of [...r1, ...r2]) descMap[r.id] = r.description;
-
-  const allSelections = new Set([
-    ...state.teams.team1.selections,
-    ...state.teams.team2.selections
-  ]);
-
-  // Each entry carries per-team scores so we can build marker datasets below
-  let sorted = allIds
-    .map(id => {
-      const s1  = hasT1 ? (r1.find(r => r.id === id)?.score ?? null) : null;
-      const s2  = hasT2 ? (r2.find(r => r.id === id)?.score ?? null) : null;
-      const avg = divisor > 0 ? ((s1 ?? 0) + (s2 ?? 0)) / divisor : 0;
-      return { id, description: descMap[id] || id, score: avg, score1: s1, score2: s2,
-               isSelected: allSelections.has(id) };
-    })
-    .sort((a, b) => b.score - a.score);
-
-  // Team score markers: a line dataset per team, points only (no connecting line).
-  // pointStyle:'line' + rotation:90 renders a short vertical tick at each score.
   const _marker = (color, name, scores) => ({
     type: 'line',
     label: name,
@@ -626,145 +646,426 @@ function renderCombinedChart() {
   });
 
   const extraDatasets = [];
-  if (hasT1) extraDatasets.push(_marker(_cssVar('--team1'), state.teams.team1.name || 'Upper Basin', sorted.map(r => r.score1)));
-  if (hasT2) extraDatasets.push(_marker(_cssVar('--team2'), state.teams.team2.name || 'Lower Basin', sorted.map(r => r.score2)));
+  if (r1.length) extraDatasets.push(_marker(_cssVar('--team1'), state.teams.team1.name || 'Upper Basin', combined.map(r => scoreMap1.get(r.id) ?? null)));
+  if (r2.length) extraDatasets.push(_marker(_cssVar('--team2'), state.teams.team2.name || 'Lower Basin', combined.map(r => scoreMap2.get(r.id) ?? null)));
 
-  _renderBarChart(canvas, sorted, _cssVar('--combined'), { extraDatasets, showLegend: extraDatasets.length > 0 });
+  _renderBarChart(canvas, combined, _cssVar('--combined'), { extraDatasets, showLegend: extraDatasets.length > 0 });
 }
 
-/**
- * Radar/spider chart for the combined view.
- * Axes = criteria (in team1's priority order, falling back to state.criteria order).
- * Datasets = alternatives selected by either team (or top 5 by avg score if none).
- * Values are normalised 0–1 per criterion; cost criteria are inverted.
- * Legend items are clickable (Chart.js default) to show/hide individual alternatives.
- */
-function renderCombinedSpiderChart() {
+/** Spider chart for the combined panel — used by Consensus and Copeland modes. */
+function _renderCombinedSpiderChart(displayIds) {
   const wrap = document.getElementById('combined-spider-wrap');
   if (!wrap || wrap.hidden) return;
 
   const canvas = document.getElementById('combined-spider');
   if (!canvas || typeof Chart === 'undefined') return;
+  if (!displayIds.length) { _destroyChart(canvas); return; }
 
-  const r1 = _activeResults('team1', true);
-  const r2 = _activeResults('team2', true);
-  if (!r1.length && !r2.length) { _destroyChart(canvas); return; }
-
-  // Criteria order: use team1's active (possibly filtered) criteria order
-  const refOrder = _activeCriteriaOrder('team1', true).length
-    ? _activeCriteriaOrder('team1', true)
+  const refOrder = _activeCriteriaOrder('team1').length
+    ? _activeCriteriaOrder('team1')
     : state.criteria.map(c => c.id);
   const orderedCriteria = refOrder
     .map(id => state.criteria.find(c => c.id === id))
     .filter(Boolean);
   if (!orderedCriteria.length) { _destroyChart(canvas); return; }
 
-  // Alternatives to show: union of selections, or top 5 by avg score
-  const allSels = new Set([
-    ...state.teams.team1.selections,
-    ...state.teams.team2.selections
-  ]);
-
-  const allIds  = [...new Set([...r1.map(r => r.id), ...r2.map(r => r.id)])];
-  const divisor = (r1.length ? 1 : 0) + (r2.length ? 1 : 0);
-  let sorted = allIds
-    .map(id => {
-      const s1  = r1.find(r => r.id === id)?.score ?? 0;
-      const s2  = r2.find(r => r.id === id)?.score ?? 0;
-      return { id, avg: (s1 + s2) / divisor, isSelected: allSels.has(id) };
-    })
-    .sort((a, b) => b.avg - a.avg);
-
-  let displayIds = allSels.size > 0
-    ? sorted.filter(r => allSels.has(r.id)).map(r => r.id)
-    : sorted.slice(0, 5).map(r => r.id);
-  if (!displayIds.length) displayIds = sorted.slice(0, 5).map(r => r.id);
-
-  // Per-criterion min/max across ALL alternatives for consistent normalisation
   const colStats = orderedCriteria.map(crit => {
     const ci   = state.criteria.findIndex(c => c.id === crit.id);
     const vals = state.alternatives.map(a => a.values[ci]).filter(v => v != null);
     return { min: Math.min(...vals), max: Math.max(...vals) };
   });
 
-  const PALETTE = [
-    _cssVar('--team1'),
-    _cssVar('--team2'),
-    _cssVar('--combined'),
-    '#a78bfa',
-    '#fb923c',
-  ];
+  const palette = [_cssVar('--team1'), _cssVar('--team2'), _cssVar('--combined'), '#a78bfa', '#fb923c'];
+  _renderSpiderChart(canvas, displayIds, orderedCriteria, colStats, palette);
+}
 
-  const datasets = displayIds.map((id, di) => {
-    const alt  = state.alternatives.find(a => a.id === id);
-    const data = orderedCriteria.map((crit, ci) => {
-      const idx = state.criteria.findIndex(c => c.id === crit.id);
-      const v   = alt?.values[idx] ?? null;
-      if (v == null) return 0;
-      const { min, max } = colStats[ci];
-      if (max === min) return 0.5;
-      const t = (v - min) / (max - min);
-      return crit.type === 1 ? t : 1 - t;
-    });
-    const color = PALETTE[di % PALETTE.length];
-    return {
-      label:                id,
-      data,
-      backgroundColor:      _hexToRgba(color, 0.12),
-      borderColor:          color,
-      pointBackgroundColor: color,
-      pointRadius:          3,
-      borderWidth:          2
-    };
-  });
+// ─────────────────────────────────────────────────────────────────────────────
+// Combined panel — mode dispatcher + per-mode renderers
+// ─────────────────────────────────────────────────────────────────────────────
 
-  const gridColor = _cssVar('--border');
-  const tickColor = _cssVar('--text-muted');
-  const chartData = {
-    labels:   orderedCriteria.map(c => { const ci = _criterionIcon(c); return ci ? `${ci} ${c.shortName || c.id}` : (c.shortName || c.id); }),
-    datasets
+/** Master entry point for the combined panel; routes to the active mode renderer. */
+function renderCombinedPanel() {
+  switch (state.combinedMode) {
+    case 'consensus':    renderConsensusPanel();    break;
+    case 'sensitivity':  renderSensitivityPanel();  break;
+    default:             renderCopelandPanel();      break;
+  }
+}
+
+// ── Mode 1: Forced Consensus ──────────────────────────────────────────────────
+
+function renderConsensusPanel() {
+  renderCriteriaList('combined');
+  renderCombinedChart();   // bar chart using consensus MCDM results
+  const spiderWrap = document.getElementById('combined-spider-wrap');
+  const tableWrap  = document.getElementById('combined-criteria-table-wrap');
+  if (spiderWrap && !spiderWrap.hidden) renderConsensusSpider();
+  if (tableWrap  && !tableWrap.hidden)  renderConsensusTable();
+  renderResults('combined');
+}
+
+function renderConsensusSpider() {
+  const r = _activeResults('combined');
+  const allSels = state.teams.combined.selections;
+  let displayResults = allSels.length > 0
+    ? r.filter(res => allSels.includes(res.id))
+    : r.slice(0, 5);
+  if (!displayResults.length) displayResults = r.slice(0, 5);
+  _renderCombinedSpiderChart(displayResults.map(res => res.id));
+}
+
+function renderConsensusTable() {
+  const wrap = document.getElementById('combined-criteria-table-wrap');
+  if (!wrap || wrap.hidden) return;
+  const rows = _sortById(_activeResults('combined'));
+  if (!rows.length) { wrap.innerHTML = '<p class="empty-msg" style="padding:.75rem 1rem">No data</p>'; return; }
+  const activeCritIds   = new Set(_activeCriteriaOrder('team1'));
+  const orderedCriteria = state.criteria.filter(c => activeCritIds.has(c.id));
+  if (!orderedCriteria.length) { wrap.innerHTML = ''; return; }
+  wrap.innerHTML = _buildCriteriaTableHTML(rows, orderedCriteria, state.method.toUpperCase());
+}
+
+// ── Mode 2: Copeland Rank Aggregation ─────────────────────────────────────────
+
+/**
+ * Compute Copeland pairwise vote between two results arrays.
+ * Pure JS — no Pyodide required.
+ * @param {Array<{id,description,rank}>} r1
+ * @param {Array<{id,description,rank}>} r2
+ * @returns {Array<{id,description,copelandScore,score,rank,isSelected}>}
+ */
+export function computeCopeland(r1, r2) {
+  const allSels = new Set([...state.teams.team1.selections, ...state.teams.team2.selections]);
+  const rankOf  = (results, id) => results.find(r => r.id === id)?.rank ?? Infinity;
+  const descOf  = id => {
+    const r = r1.find(r => r.id === id) ?? r2.find(r => r.id === id);
+    return r?.description ?? '';
   };
 
-  if (canvas._chart) {
-    canvas._chart.data = chartData;
-    canvas._chart.update('none');
+  const ids    = [...new Set([...r1.map(r => r.id), ...r2.map(r => r.id)])];
+  const scores = Object.fromEntries(ids.map(id => [id, 0]));
+
+  for (let i = 0; i < ids.length; i++) {
+    for (let j = i + 1; j < ids.length; j++) {
+      const a = ids[i], b = ids[j];
+      let winsA = 0, winsB = 0;
+      for (const res of [r1, r2]) {
+        const ra = rankOf(res, a), rb = rankOf(res, b);
+        if (ra < rb) winsA++;
+        else if (rb < ra) winsB++;
+      }
+      if (winsA > winsB)      { scores[a]++; scores[b]--; }
+      else if (winsB > winsA) { scores[b]++; scores[a]--; }
+      // tie → no change
+    }
+  }
+
+  const sorted = ids
+    .map(id => ({ id, description: descOf(id), copelandScore: scores[id], isSelected: allSels.has(id) }))
+    .sort((a, b) => b.copelandScore - a.copelandScore || a.id.localeCompare(b.id));
+
+  return sorted.map((r, i) => ({ ...r, score: r.copelandScore, rank: i + 1 }));
+}
+
+function renderCopelandPanel() {
+  const canvas = document.getElementById('combined-chart');
+  if (!canvas || typeof Chart === 'undefined') return;
+
+  const r1 = _activeResults('team1');
+  const r2 = _activeResults('team2');
+  if (!r1.length && !r2.length) { _destroyChart(canvas); return; }
+
+  const copeland = computeCopeland(r1, r2);
+  if (!copeland.length) { _destroyChart(canvas); return; }
+
+  _renderBarChart(canvas, copeland, _cssVar('--combined'), {
+    xMin: undefined   // Copeland scores can be negative
+  });
+
+  // Spider chart
+  const spiderWrap = document.getElementById('combined-spider-wrap');
+  if (spiderWrap && !spiderWrap.hidden) {
+    const GOLD = '#f59e0b', SILVER = '#94a3b8', BRONZE = '#b45309', MUTED = '#6b7280';
+    const copelandPalette = copeland.map((_, i) =>
+      i === 0 ? GOLD : i === 1 ? SILVER : i === 2 ? BRONZE : MUTED
+    );
+    const displayIds = copeland.slice(0, 5).map(r => r.id);
+    const refOrder = _activeCriteriaOrder('team1').length
+      ? _activeCriteriaOrder('team1')
+      : state.criteria.map(c => c.id);
+    const orderedCriteria = refOrder.map(id => state.criteria.find(c => c.id === id)).filter(Boolean);
+    if (orderedCriteria.length) {
+      const colStats = orderedCriteria.map(crit => {
+        const ci   = state.criteria.findIndex(c => c.id === crit.id);
+        const vals = state.alternatives.map(a => a.values[ci]).filter(v => v != null);
+        return { min: Math.min(...vals), max: Math.max(...vals) };
+      });
+      const spiderCanvas = document.getElementById('combined-spider');
+      if (spiderCanvas) _renderSpiderChart(spiderCanvas, displayIds, orderedCriteria, colStats, copelandPalette);
+    }
+  }
+
+  // Pairwise matrix — shown in the "Table" view slot
+  const tableWrap = document.getElementById('combined-criteria-table-wrap');
+  if (tableWrap && !tableWrap.hidden) _renderPairwiseMatrix(copeland, r1, r2);
+}
+
+function _renderPairwiseMatrix(copeland, r1, r2) {
+  const tableDiv = document.getElementById('combined-criteria-table-wrap');
+  if (!tableDiv) return;
+
+  const rankOf = (results, id) => results.find(r => r.id === id)?.rank ?? Infinity;
+  const ids    = copeland.map(r => r.id);
+
+  const thead = `<thead><tr><th></th>${ids.map(id => `<th title="${escHtml(id)}">${escHtml(id)}</th>`).join('')}</tr></thead>`;
+  const tbody = `<tbody>${ids.map(id => {
+    const cells = ids.map(other => {
+      if (id === other) return `<td class="pairwise-cell-self">—</td>`;
+      let winsA = 0, winsB = 0;
+      for (const res of [r1, r2]) {
+        const ra = rankOf(res, id), rb = rankOf(res, other);
+        if (ra < rb) winsA++; else if (rb < ra) winsB++;
+      }
+      if (winsA > winsB)      return `<td class="pairwise-cell-win">+1</td>`;
+      else if (winsB > winsA) return `<td class="pairwise-cell-loss">−1</td>`;
+      else                    return `<td class="pairwise-cell-tie">0</td>`;
+    }).join('');
+    return `<tr><th title="${escHtml(id)}">${escHtml(id)}</th>${cells}</tr>`;
+  }).join('')}</tbody>`;
+
+  tableDiv.innerHTML = `
+    <p class="sensitivity-section-label">Pairwise matrix</p>
+    <p class="sensitivity-hint">Each cell shows whether the row alternative beats (+1), loses to (−1), or ties (0) the column alternative across both teams' rankings.</p>
+    <table class="pairwise-table">${thead}${tbody}</table>`;
+}
+
+// ── Mode 3: Sensitivity Analysis ──────────────────────────────────────────────
+
+/**
+ * Build a per-criterion weight map for a team (criterionId → normalized weight).
+ * Criteria absent from the team's order get weight 0.
+ */
+function _buildWeightVectorForTeam(teamId) {
+  // Respect the active criteria filter so sensitivity matches what the team is actually comparing.
+  // Always use p=1 (linear rank-order weights) so the sensitivity reflects each
+  // team's actual priority ordering regardless of the shared weight-exponent slider.
+  // At p=0 both teams would get equal weights and the analysis becomes meaningless.
+  const criteriaOrder = _activeCriteriaOrder(teamId);
+  const weights = rankOrderWeights(criteriaOrder.map((_, i) => i + 1), 1);
+  return new Map(criteriaOrder.map((id, i) => [id, weights[i]]));
+}
+
+async function computeSensitivity(nSteps = 20) {
+  const gen = ++state.sensitivityGen;
+  state.sensitivityRunning = true;
+  state.sensitivityCache   = null;
+  renderSensitivityPanel(); // show progress bar
+
+  const w1 = _buildWeightVectorForTeam('team1');
+  const w2 = _buildWeightVectorForTeam('team2');
+
+  // Respect active filters: use the union of both teams' active criteria and alternatives.
+  const activeCritIds = [...new Set([..._activeCriteriaOrder('team1'), ..._activeCriteriaOrder('team2')])];
+  const activeCriteria = activeCritIds.map(id => state.criteria.find(c => c.id === id)).filter(Boolean);
+  const critIds = activeCriteria.map(c => c.id);
+  const types   = activeCriteria.map(c => c.type);
+
+  const r1 = _activeResults('team1');
+  const r2 = _activeResults('team2');
+  const altIds = [...new Set([...r1.map(r => r.id), ...r2.map(r => r.id)])];
+  const matrix = altIds.map(altId => {
+    const alt = state.alternatives.find(a => a.id === altId);
+    return critIds.map(critId => {
+      const ci = state.criteria.findIndex(c => c.id === critId);
+      return alt?.values[ci] ?? 0;
+    });
+  });
+  const steps   = Array.from({ length: nSteps + 1 }, (_, i) => i / nSteps);
+  const allRanks = [];
+
+  const progressFill = document.getElementById('sensitivity-progress-fill');
+  const progressText = document.getElementById('sensitivity-progress-text');
+
+  for (let si = 0; si <= nSteps; si++) {
+    const t = steps[si];
+    const mixed = critIds.map(id => (1 - t) * (w1.get(id) ?? 0) + t * (w2.get(id) ?? 0));
+    const sum   = mixed.reduce((a, b) => a + b, 0);
+    const norm  = sum > 0 ? mixed.map(w => w / sum) : mixed.map(() => 1 / mixed.length);
+
+    let scores;
+    try {
+      scores = runMethod(state.method, matrix, norm, types);
+    } catch {
+      scores = altIds.map(() => 0);
+    }
+    allRanks.push(scoreToRank(scores));
+
+    if (si % 5 === 0 || si === nSteps) {
+      const pct = Math.round((si / nSteps) * 100);
+      if (progressFill) progressFill.style.width = pct + '%';
+      if (progressText) progressText.textContent = `Computing… ${si} / ${nSteps}`;
+      await new Promise(resolve => requestAnimationFrame(resolve));
+    }
+  }
+
+  // Detect flip points: steps where rank-1 alternative changes
+  const rank1At = step => {
+    const r = allRanks[step];
+    return altIds[r.indexOf(Math.min(...r))];
+  };
+  const flipPoints = [];
+  for (let si = 1; si <= nSteps; si++) {
+    if (rank1At(si) !== rank1At(si - 1)) flipPoints.push(steps[si]);
+  }
+
+  // Per-alternative rank-1 spans
+  const summary = [];
+  let current = rank1At(0), spanStart = 0;
+  for (let si = 1; si <= nSteps; si++) {
+    const here = rank1At(si);
+    if (here !== current || si === nSteps) {
+      const end = here !== current ? steps[si - 1] : steps[si];
+      summary.push({ id: current, from: spanStart, to: end });
+      current = here; spanStart = steps[si];
+    }
+  }
+
+  // Weight disagreement table
+  const weightDiff = critIds.map((id) => ({
+    id,
+    shortName: state.criteria.find(c => c.id === id)?.shortName || id,
+    w1: (w1.get(id) ?? 0) * 100,
+    w2: (w2.get(id) ?? 0) * 100,
+    diff: Math.abs((w1.get(id) ?? 0) - (w2.get(id) ?? 0)) * 100
+  })).sort((a, b) => b.diff - a.diff).slice(0, 5);
+
+  if (gen !== state.sensitivityGen) return; // invalidated while computing
+  state.sensitivityCache   = { steps, altIds, ranks: allRanks, flipPoints, summary, weightDiff };
+  state.sensitivityRunning = false;
+  renderSensitivityPanel();
+}
+
+function renderSensitivityPanel() {
+  const chartWrap   = document.getElementById('combined-chart-wrap');
+  const controls    = document.getElementById('combined-sensitivity-controls');
+  const progressDiv = document.getElementById('combined-sensitivity-progress');
+  const summaryDiv  = document.getElementById('combined-sensitivity-summary');
+  const resultsDiv  = document.getElementById('combined-sensitivity-results');
+  if (!controls) return;
+
+  controls.hidden = false;
+
+  if (state.sensitivityRunning) {
+    if (progressDiv) progressDiv.hidden = false;
+    if (chartWrap)   chartWrap.hidden   = true;
+    if (resultsDiv)  resultsDiv.hidden  = true;
     return;
   }
 
+  if (progressDiv) progressDiv.hidden = true;
+
+  if (!state.sensitivityCache) {
+    if (chartWrap)  chartWrap.hidden  = true;
+    if (resultsDiv) resultsDiv.hidden = true;
+    if (summaryDiv) summaryDiv.innerHTML = '';
+    computeSensitivity();
+    return;
+  }
+
+  // Results ready
+  if (chartWrap)  chartWrap.hidden  = false;
+  if (resultsDiv) resultsDiv.hidden = false;
+
+  const canvas = document.getElementById('combined-chart');
+  if (canvas) _renderSensitivityLineChart(canvas, state.sensitivityCache);
+
+  if (summaryDiv) _renderSensitivitySummary(summaryDiv, state.sensitivityCache);
+  if (resultsDiv) _renderSensitivityResults(resultsDiv, state.sensitivityCache);
+}
+
+function _renderSensitivityLineChart(canvas, cache) {
+  _destroyChart(canvas);
+  if (typeof Chart === 'undefined') return;
+
+  const { steps, altIds, ranks, flipPoints } = cache;
+  const tickColor = _cssVar('--text-muted');
+  const gridColor = _cssVar('--border');
+
+  // Median rank per alternative (for prominence sorting)
+  const medianRank = altIds.map((_, ai) => {
+    const sorted = steps.map((_, si) => ranks[si][ai]).sort((a, b) => a - b);
+    return sorted[Math.floor(sorted.length / 2)];
+  });
+  const topAltIndices = altIds
+    .map((_, i) => ({ i, med: medianRank[i] }))
+    .sort((a, b) => a.med - b.med)
+    .slice(0, 3)
+    .map(x => x.i);
+
+  const PALETTE = [_cssVar('--team1'), _cssVar('--team2'), _cssVar('--combined'), '#a78bfa', '#fb923c', '#34d399'];
+
+  const altDatasets = altIds.map((id, ai) => {
+    const isTop   = topAltIndices.includes(ai);
+    const color   = isTop ? PALETTE[topAltIndices.indexOf(ai) % PALETTE.length] : _cssVar('--text-dim');
+    return {
+      label:       id,
+      data:        steps.map((_, si) => ranks[si][ai]),
+      borderColor: color,
+      backgroundColor: color,
+      borderWidth: isTop ? 2.5 : 1,
+      pointRadius: isTop ? 3 : 0,
+      tension:     0.2,
+      borderDash:  isTop ? [] : [3, 3],
+      fill:        false
+    };
+  });
+
+  const flipDatasets = flipPoints.map(t => ({
+    label:       `Flip at ${Math.round(t * 100)}%`,
+    data:        steps.map(s => s === t ? 1 : null),
+    borderColor: _cssVar('--text-dim'),
+    borderWidth: 1,
+    borderDash:  [4, 4],
+    pointRadius: 0,
+    fill:        false,
+    showLine:    true,
+    spanGaps:    false
+  }));
+
+  const wrap = canvas.parentElement;
+  if (wrap) wrap.style.height = '260px';
+
   canvas._chart = new Chart(canvas, {
-    type: 'radar',
-    data: chartData,
+    type: 'line',
+    data: { labels: steps.map(t => Math.round(t * 100) + '%'), datasets: [...altDatasets, ...flipDatasets] },
     options: {
       responsive:          true,
-      maintainAspectRatio: true,
-      aspectRatio:         1,
+      maintainAspectRatio: false,
       scales: {
-        r: {
-          min: 0,
-          max: 1,
-          ticks:       { display: false },
-          grid:        { color: gridColor },
-          angleLines:  { color: gridColor },
-          pointLabels: { color: tickColor, font: { size: 10 } }
+        x: {
+          title: { display: true, text: '← Team 1 weights    Team 2 weights →', color: tickColor },
+          ticks: { color: tickColor, maxTicksLimit: 11 },
+          grid:  { color: gridColor }
+        },
+        y: {
+          reverse: true,
+          min:     1,
+          max:     altIds.length,
+          title:   { display: true, text: 'Rank', color: tickColor },
+          ticks:   { color: tickColor, stepSize: 1, callback: v => Number.isInteger(v) ? `#${v}` : '' },
+          grid:    { color: gridColor }
         }
       },
       plugins: {
         legend: {
           display:  true,
           position: 'bottom',
-          labels:   { color: tickColor, boxWidth: 10, padding: 8, font: { size: 11 } }
+          labels:   { color: tickColor, filter: item => !item.text.startsWith('Flip'), boxWidth: 10, font: { size: 10 } }
         },
         tooltip: {
           callbacks: {
-            label: ctx => {
-              const id   = displayIds[ctx.datasetIndex];
-              const crit = orderedCriteria[ctx.dataIndex];
-              const alt  = state.alternatives.find(a => a.id === id);
-              const idx  = state.criteria.findIndex(c => c.id === crit?.id);
-              const raw  = alt?.values[idx];
-              const norm = ctx.parsed.r?.toFixed(2);
-              return ` ${id} — ${crit?.shortName || crit?.id}: ${raw != null ? raw : 'N/A'} (norm ${norm})`;
-            }
+            title: ctx => `Weight blend: ${ctx[0]?.label}`,
+            label: ctx => ` ${ctx.dataset.label}: Rank #${ctx.parsed.y}`
           }
         }
       }
@@ -772,76 +1073,40 @@ function renderCombinedSpiderChart() {
   });
 }
 
-/**
- * Heatmap table for the combined view.
- * Columns = criteria in team1's priority order; rows = alternatives sorted by avg score.
- */
-function renderCombinedTable() {
-  const wrap = document.getElementById('combined-criteria-table-wrap');
-  if (!wrap || wrap.hidden) return;
+function _renderSensitivitySummary(el, cache) {
+  const { weightDiff } = cache;
 
-  const r1 = _activeResults('team1', true);
-  const r2 = _activeResults('team2', true);
-  if (!r1.length && !r2.length) {
-    wrap.innerHTML = '<p class="empty-msg" style="padding:.75rem 1rem">No data</p>';
-    return;
-  }
+  const diffRows = weightDiff.map(d =>
+    `<tr><td>${escHtml(d.shortName)}</td><td>${d.w1.toFixed(1)}%</td><td>${d.w2.toFixed(1)}%</td><td><strong>${d.diff.toFixed(1)}pp</strong></td></tr>`
+  ).join('');
 
-  // Criteria — use team1's active (possibly filtered) criteria order for combined view
-  const activeCombinedIds = new Set(_activeCriteriaOrder('team1', true));
-  const orderedCriteria   = state.criteria.filter(c => activeCombinedIds.has(c.id));
-  if (!orderedCriteria.length) { wrap.innerHTML = ''; return; }
+  el.innerHTML = `
+    <div class="sensitivity-weight-details">
+      <p class="sensitivity-section-label">Largest weight disagreements (top 5)</p>
+      <p class="sensitivity-hint">Criteria with the largest priority difference drive ranking instability.</p>
+      <table class="sensitivity-weight-table">
+        <thead><tr><th>Criterion</th><th>${escHtml(state.teams.team1.name)}</th><th>${escHtml(state.teams.team2.name)}</th><th>Diff</th></tr></thead>
+        <tbody>${diffRows}</tbody>
+      </table>
+    </div>
+    <div class="sensitivity-chart-header">
+      <p class="sensitivity-section-label">Ranking sensitivity</p>
+      <p class="sensitivity-hint">Shows how the final ranking changes as weights shift from Team 1's to Team 2's criteria priority order. Weight is always p = 1.</p>
+    </div>`;
+}
 
-  // Alternatives sorted by average combined score
-  const allSels = new Set([...state.teams.team1.selections, ...state.teams.team2.selections]);
-  const divisor = (r1.length ? 1 : 0) + (r2.length ? 1 : 0);
-  const allIds  = [...new Set([...r1.map(r => r.id), ...r2.map(r => r.id)])];
-  const unsorted = allIds.map(id => {
-    const s1  = r1.find(r => r.id === id)?.score ?? 0;
-    const s2  = r2.find(r => r.id === id)?.score ?? 0;
-    const alt = state.alternatives.find(a => a.id === id);
-    return { id, score: (s1 + s2) / divisor, isSelected: allSels.has(id),
-             description: alt?.description ?? '' };
-  });
-  const combinedRanks = scoreToRank(unsorted.map(r => r.score));
-  const rows = _sortById(unsorted.map((r, i) => ({ ...r, rank: combinedRanks[i] })));
+function _renderSensitivityResults(el, cache) {
+  const { summary, flipPoints } = cache;
 
-  if (!rows.length) {
-    wrap.innerHTML = '<p class="empty-msg" style="padding:.75rem 1rem">No data</p>';
-    return;
-  }
+  const flipText = flipPoints.length === 0
+    ? '<p>No flip points. The top alternative is stable regardless of whose weights are used.</p>'
+    : `<p>Top alternative changes at: <strong>${flipPoints.map(t => Math.round(t * 100) + '%').join(', ')}</strong></p>`;
 
-  // Per-column min/max for displayed rows
-  const colStats = orderedCriteria.map(crit => {
-    const ci   = state.criteria.findIndex(c => c.id === crit.id);
-    const vals = rows
-      .map(r => state.alternatives.find(a => a.id === r.id)?.values[ci])
-      .filter(v => v != null);
-    return { min: Math.min(...vals), max: Math.max(...vals) };
-  });
+  const spans = summary.map(s =>
+    `<li><strong>${escHtml(s.id)}</strong> leads from ${Math.round(s.from * 100)}% to ${Math.round(s.to * 100)}%</li>`
+  ).join('');
 
-  const method = state.method.toUpperCase();
-
-  const thead = `<thead><tr>
-    <th class="cvt-rank">#</th>
-    <th class="cvt-id"></th>
-    <th class="cvt-score">${escHtml(method)} avg</th>
-    ${orderedCriteria.map(c => { const ci = _criterionIcon(c); return `<th title="${ci ? ci + ' ' : ''}${escHtml(c.name)} (${c.type === 1 ? '↑ benefit' : '↓ cost'})">${ci ? ci + ' ' : ''}${escHtml(c.id)}</th>`; }).join('')}
-  </tr></thead>`;
-
-  const tbody = `<tbody>${rows.map(r => {
-    const alt   = state.alternatives.find(a => a.id === r.id);
-    const cells = orderedCriteria.map((crit, ci) => {
-      const idx = state.criteria.findIndex(c => c.id === crit.id);
-      const v   = alt?.values[idx] ?? null;
-      const bg  = v != null ? _heatmapColor(v, colStats[ci].min, colStats[ci].max, crit.type) : 'var(--surface2)';
-      return `<td class="cvt-cell" style="background:${bg}" title="${escHtml(crit.id)}: ${v != null ? v : '—'}">${v != null ? v : '—'}</td>`;
-    }).join('');
-    const rowTitle = ` title="${escHtml(r.id)}: ${escHtml(r.description)}"`;
-    return `<tr class="${r.isSelected ? 'selected-alt' : ''}"${rowTitle}><td class="cvt-rank">${r.rank}</td><td class="cvt-id">${escHtml(r.id)}</td><td class="cvt-score">${r.score.toFixed(3)}</td>${cells}</tr>`;
-  }).join('')}</tbody>`;
-
-  wrap.innerHTML = `<div class="cvt-scroll"><table class="criteria-values-table">${thead}${tbody}</table></div>`;
+  el.innerHTML = `${flipText}<ul class="sensitivity-spans">${spans}</ul>`;
 }
 
 /**
@@ -857,7 +1122,7 @@ function renderCombinedTable() {
  * @param {{ extraDatasets?: object[], showLegend?: boolean }} [opts]
  */
 function _renderBarChart(canvas, results, color, opts = {}) {
-  const { extraDatasets = [], showLegend = false } = opts;
+  const { extraDatasets = [], showLegend = false, xMin = 0 } = opts;
 
   const gridColor   = _cssVar('--border');
   const tickColor   = _cssVar('--text-muted');
@@ -903,6 +1168,11 @@ function _renderBarChart(canvas, results, color, opts = {}) {
     ]
   };
 
+  // Destroy and recreate if the existing chart is a different type (e.g. switching from sensitivity line chart)
+  if (canvas._chart && canvas._chart.config.type !== 'bar') {
+    _destroyChart(canvas);
+  }
+
   if (canvas._chart) {
     canvas._results = results;
     canvas._chart.data.labels   = chartData.labels;
@@ -941,7 +1211,7 @@ function _renderBarChart(canvas, results, color, opts = {}) {
           }
         }
       },
-      scales: _baseChartScales(tickColor, gridColor)
+      scales: _baseChartScales(tickColor, gridColor, xMin)
     }
   });
 }
@@ -969,28 +1239,19 @@ function _heatmapColor(val, min, max, type) {
   return `rgb(${r},${g},${b})`;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Shared rendering helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
 /**
- * Render the criteria-values heatmap table for a team panel.
- * Only executes when the table view is visible (chart-wrap is hidden).
+ * Build the criteria-values heatmap table HTML.
+ * Returns a <div class="cvt-scroll"><table …>…</table></div> string.
+ *
+ * @param {Array<{id,description,rank,score,isSelected}>} rows  sorted as desired
+ * @param {Array<{id,name,shortName,type}>} orderedCriteria  columns in order
+ * @param {string} scoreLabel  header text for the score column
  */
-function renderCriteriaTable(teamId) {
-  const wrap = document.getElementById(`${teamId}-criteria-table-wrap`);
-  if (!wrap || wrap.hidden) return;
-
-  const rows = _sortById(_activeResults(teamId));
-
-  if (!rows.length) {
-    wrap.innerHTML = '<p class="empty-msg" style="padding:.75rem 1rem">No data</p>';
-    return;
-  }
-
-  // Criteria in active order (respects criteria filter checkbox)
-  const activeCritIds  = new Set(_activeCriteriaOrder(teamId));
-  const orderedCriteria = state.criteria.filter(c => activeCritIds.has(c.id));
-
-  if (!orderedCriteria.length) { wrap.innerHTML = ''; return; }
-
-  // Per-column min/max for the displayed rows
+function _buildCriteriaTableHTML(rows, orderedCriteria, scoreLabel) {
   const colStats = orderedCriteria.map(crit => {
     const ci   = state.criteria.findIndex(c => c.id === crit.id);
     const vals = rows
@@ -999,12 +1260,10 @@ function renderCriteriaTable(teamId) {
     return { min: Math.min(...vals), max: Math.max(...vals) };
   });
 
-  const method = state.method.toUpperCase();
-
   const thead = `<thead><tr>
     <th class="cvt-rank">#</th>
     <th class="cvt-id"></th>
-    <th class="cvt-score">${escHtml(method)}</th>
+    <th class="cvt-score">${escHtml(scoreLabel)}</th>
     ${orderedCriteria.map(c => { const ci = _criterionIcon(c); return `<th title="${ci ? ci + ' ' : ''}${escHtml(c.name)} (${c.type === 1 ? '↑ benefit' : '↓ cost'})">${ci ? ci + ' ' : ''}${escHtml(c.id)}</th>`; }).join('')}
   </tr></thead>`;
 
@@ -1020,7 +1279,114 @@ function renderCriteriaTable(teamId) {
     return `<tr class="${r.isSelected ? 'selected-alt' : ''}"${rowTitle}><td class="cvt-rank">${r.rank}</td><td class="cvt-id">${escHtml(r.id)}</td><td class="cvt-score">${r.score.toFixed(3)}</td>${cells}</tr>`;
   }).join('')}</tbody>`;
 
-  wrap.innerHTML = `<div class="cvt-scroll"><table class="criteria-values-table">${thead}${tbody}</table></div>`;
+  return `<div class="cvt-scroll"><table class="criteria-values-table">${thead}${tbody}</table></div>`;
+}
+
+/**
+ * Render a radar/spider chart onto a canvas.
+ * Shared by both per-team and combined views.
+ *
+ * @param {HTMLCanvasElement} canvas
+ * @param {string[]} displayIds  alternative IDs to render as datasets
+ * @param {Array<{id,name,shortName,type}>} orderedCriteria  axes in order
+ * @param {Array<{min,max}>} colStats  per-criterion value range (from all alternatives)
+ * @param {string[]} palette  CSS hex colors, cycled per dataset
+ */
+function _renderSpiderChart(canvas, displayIds, orderedCriteria, colStats, palette) {
+  const datasets = displayIds.map((id, di) => {
+    const alt  = state.alternatives.find(a => a.id === id);
+    const data = orderedCriteria.map((crit, ci) => {
+      const idx = state.criteria.findIndex(c => c.id === crit.id);
+      const v   = alt?.values[idx] ?? null;
+      if (v == null) return 0;
+      const { min, max } = colStats[ci];
+      if (max === min) return 0.5;
+      const t = (v - min) / (max - min);
+      return crit.type === 1 ? t : 1 - t;
+    });
+    const color = palette[di % palette.length];
+    return {
+      label:                id,
+      data,
+      backgroundColor:      _hexToRgba(color, 0.12),
+      borderColor:          color,
+      pointBackgroundColor: color,
+      pointRadius:          3,
+      borderWidth:          2
+    };
+  });
+
+  const gridColor = _cssVar('--border');
+  const tickColor = _cssVar('--text-muted');
+  const chartData = {
+    labels:   orderedCriteria.map(c => { const ci = _criterionIcon(c); return ci ? `${ci} ${c.id}` : c.id; }),
+    datasets
+  };
+
+  if (canvas._chart) {
+    canvas._chart.data = chartData;
+    canvas._chart.update('none');
+    return;
+  }
+
+  canvas._chart = new Chart(canvas, {
+    type: 'radar',
+    data: chartData,
+    options: {
+      responsive:          true,
+      maintainAspectRatio: true,
+      aspectRatio:         1,
+      layout: { padding: 20 },
+      scales: {
+        r: {
+          min: 0,
+          max: 1,
+          ticks:       { display: false },
+          grid:        { color: gridColor },
+          angleLines:  { color: gridColor },
+          pointLabels: { color: tickColor, font: { size: 10 } }
+        }
+      },
+      plugins: {
+        legend: {
+          display:  true,
+          position: 'bottom',
+          labels:   { color: tickColor, boxWidth: 10, padding: 8, font: { size: 11 } }
+        },
+        tooltip: {
+          callbacks: {
+            label: ctx => {
+              const id   = displayIds[ctx.datasetIndex];
+              const crit = orderedCriteria[ctx.dataIndex];
+              const alt  = state.alternatives.find(a => a.id === id);
+              const idx  = state.criteria.findIndex(c => c.id === crit?.id);
+              const raw  = alt?.values[idx];
+              const norm = ctx.parsed.r?.toFixed(2);
+              return ` ${id} — ${crit?.shortName || crit?.id}: ${raw != null ? raw : 'N/A'} (norm ${norm})`;
+            }
+          }
+        }
+      }
+    }
+  });
+}
+
+/**
+ * Render the criteria-values heatmap table for a team panel.
+ * Only executes when the table view is visible (chart-wrap is hidden).
+ */
+function renderCriteriaTable(teamId) {
+  const wrap = document.getElementById(`${teamId}-criteria-table-wrap`);
+  if (!wrap || wrap.hidden) return;
+
+  const rows = _sortById(_activeResults(teamId));
+  if (!rows.length) { wrap.innerHTML = '<p class="empty-msg" style="padding:.75rem 1rem">No data</p>'; return; }
+
+  const activeCritIds   = new Set(_activeCriteriaOrder(teamId));
+  const orderedCriteria = state.criteria.filter(c => activeCritIds.has(c.id));
+  if (!orderedCriteria.length) { wrap.innerHTML = ''; return; }
+
+  wrap.innerHTML = _buildCriteriaTableHTML(rows, orderedCriteria, state.method.toUpperCase());
 }
 
 /**
@@ -1046,105 +1412,24 @@ function renderSpiderChart(teamId) {
     .filter(Boolean);
   if (!orderedCriteria.length) { _destroyChart(canvas); return; }
 
-  // Alternatives to display: selected ones, else top 5.
-  // When "calc selected only" is active, results already contains only selected alts.
   const sels = team.selections;
   let displayResults = sels.length > 0
     ? results.filter(r => sels.includes(r.id))
     : results.slice(0, 5);
   if (!displayResults.length) displayResults = results.slice(0, 5);
 
-  // Per-criterion min/max across ALL alternatives for consistent normalisation
   const colStats = orderedCriteria.map(crit => {
     const ci   = state.criteria.findIndex(c => c.id === crit.id);
     const vals = state.alternatives.map(a => a.values[ci]).filter(v => v != null);
     return { min: Math.min(...vals), max: Math.max(...vals) };
   });
 
-  const teamColor = _cssVar(teamId === 'team1' ? '--team1' : '--team2');
-  const PALETTE   = [
-    teamColor,
-    _cssVar('--combined'),
-    '#a78bfa', // violet
-    '#fb923c', // orange
-    '#34d399', // emerald
-  ];
+  const teamColor = teamId === 'combined'
+    ? _cssVar('--combined')
+    : _cssVar(teamId === 'team1' ? '--team1' : '--team2');
+  const palette = [teamColor, _cssVar(teamId === 'team1' ? '--team2' : '--team1'), '#a78bfa', '#fb923c', '#34d399'];
 
-  const datasets = displayResults.map((r, di) => {
-    const alt   = state.alternatives.find(a => a.id === r.id);
-    const data  = orderedCriteria.map((crit, ci) => {
-      const idx = state.criteria.findIndex(c => c.id === crit.id);
-      const v   = alt?.values[idx] ?? null;
-      if (v == null) return 0;
-      const { min, max } = colStats[ci];
-      if (max === min) return 0.5;
-      const t = (v - min) / (max - min);
-      return crit.type === 1 ? t : 1 - t; // invert cost criteria
-    });
-    const color = PALETTE[di % PALETTE.length];
-    return {
-      label:                r.id,
-      data,
-      backgroundColor:      _hexToRgba(color, 0.12),
-      borderColor:          color,
-      pointBackgroundColor: color,
-      pointRadius:          3,
-      borderWidth:          2
-    };
-  });
-
-  const gridColor  = _cssVar('--border');
-  const tickColor  = _cssVar('--text-muted');
-  const chartData  = {
-    labels:   orderedCriteria.map(c => { const ci = _criterionIcon(c); return ci ? `${ci} ${c.shortName || c.id}` : (c.shortName || c.id); }),
-    datasets
-  };
-
-  if (canvas._chart) {
-    canvas._chart.data = chartData;
-    canvas._chart.update('none');
-    return;
-  }
-
-  canvas._chart = new Chart(canvas, {
-    type: 'radar',
-    data: chartData,
-    options: {
-      responsive:          true,
-      maintainAspectRatio: true,
-      aspectRatio:         1,
-      scales: {
-        r: {
-          min: 0,
-          max: 1,
-          ticks:       { display: false },
-          grid:        { color: gridColor },
-          angleLines:  { color: gridColor },
-          pointLabels: { color: tickColor, font: { size: 10 } }
-        }
-      },
-      plugins: {
-        legend: {
-          display:  true,
-          position: 'bottom',
-          labels:   { color: tickColor, boxWidth: 10, padding: 8, font: { size: 11 } }
-        },
-        tooltip: {
-          callbacks: {
-            label: ctx => {
-              const r    = displayResults[ctx.datasetIndex];
-              const crit = orderedCriteria[ctx.dataIndex];
-              const alt  = state.alternatives.find(a => a.id === r?.id);
-              const idx  = state.criteria.findIndex(c => c.id === crit?.id);
-              const raw  = alt?.values[idx];
-              const norm = ctx.parsed.r?.toFixed(2);
-              return ` ${r?.id} — ${crit?.shortName || crit?.id}: ${raw != null ? raw : 'N/A'} (norm ${norm})`;
-            }
-          }
-        }
-      }
-    }
-  });
+  _renderSpiderChart(canvas, displayResults.map(r => r.id), orderedCriteria, colStats, palette);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1169,9 +1454,11 @@ function wireGlobalButtons() {
     }
   });
 
-  // Save ranking buttons
-  document.getElementById('team1-save-btn')?.addEventListener('click', () => saveRanking('team1'));
-  document.getElementById('team2-save-btn')?.addEventListener('click', () => saveRanking('team2'));
+  // Save ranking buttons — delegated so dynamically-rendered buttons are covered
+  document.addEventListener('click', e => {
+    const btn = e.target.closest('.btn-save-ranking[data-team]');
+    if (btn) saveRanking(btn.dataset.team);
+  });
 
   // Shared p-value slider — affects both teams
   const sharedSlider = document.getElementById('shared-p-slider');
@@ -1214,9 +1501,7 @@ function wireGlobalButtons() {
       chartWrap.hidden  = view !== 'bar';
       spiderWrap.hidden = view !== 'spider';
       tableWrap.hidden  = view !== 'table';
-      if (view === 'spider') renderCombinedSpiderChart();
-      if (view === 'table')  renderCombinedTable();
-      if (view === 'bar')    renderCombinedChart();
+      renderCombinedPanel();
     } else {
       const chartWrap  = document.getElementById(`${teamId}-chart-wrap`);
       const spiderWrap = document.getElementById(`${teamId}-spider-wrap`);
@@ -1234,11 +1519,9 @@ function wireGlobalButtons() {
   // Calc-selected checkboxes (event delegation)
   document.addEventListener('change', e => {
     if (e.target.classList.contains('calc-selected-checkbox')) {
-      // Switching the checkbox just changes which results are displayed — no recompute needed.
+      _invalidateSensitivity();
       for (const teamId of TEAMS) { renderResults(teamId); renderChart(teamId); renderCriteriaTable(teamId); renderSpiderChart(teamId); }
-      renderCombinedChart();
-      renderCombinedSpiderChart();
-      renderCombinedTable();
+      renderCombinedPanel();
     }
 
     // Criteria selection checkboxes
@@ -1252,34 +1535,28 @@ function wireGlobalButtons() {
         state.teams[teamId].criteriaSelections = sels.filter(id => id !== criterionId);
       }
       recompute(teamId);
-      renderCriteriaList(teamId); // refresh deselected class + weight display
-      renderResults(teamId);
-      renderChart(teamId);
-      renderCriteriaTable(teamId);
-      renderSpiderChart(teamId);
-      renderCombinedChart();
-      renderCombinedSpiderChart();
-      renderCombinedTable();
-    }
-
-    // "Calculate selected criteria only" toggle
-    if (e.target.classList.contains('calc-criteria-checkbox')) {
-      const teamId = e.target.dataset.team;
-      if (!teamId) return;
-      if (teamId === 'combined') {
-        renderCombinedChart();
-        renderCombinedSpiderChart();
-        renderCombinedTable();
-      } else {
-        renderCriteriaList(teamId); // refreshes weight display and deselected backgrounds
+      _invalidateSensitivity();
+      renderCriteriaList(teamId);
+      if (teamId !== 'combined') {
         renderResults(teamId);
         renderChart(teamId);
         renderCriteriaTable(teamId);
         renderSpiderChart(teamId);
-        renderCombinedChart();
-        renderCombinedSpiderChart();
-        renderCombinedTable();
       }
+      renderCombinedPanel();
+    }
+
+    // "Calculate selected criteria only" toggle — global filter, re-render everything
+    if (e.target.classList.contains('calc-criteria-checkbox')) {
+      _invalidateSensitivity();
+      for (const teamId of TEAMS) {
+        renderCriteriaList(teamId);
+        renderResults(teamId);
+        renderChart(teamId);
+        renderCriteriaTable(teamId);
+        renderSpiderChart(teamId);
+      }
+      renderCombinedPanel();
     }
 
     // Alternative selection checkboxes
@@ -1295,11 +1572,10 @@ function wireGlobalButtons() {
       state.teams[teamId].isDirty = true;
       logEvent(state.scriptUrl, 'selection_changed', teamId, { selectedCount: state.teams[teamId].selections.length });
       recompute(teamId);   // recomputes both full and selectedResults
+      _invalidateSensitivity();
       renderResults(teamId);
       for (const id of TEAMS) { renderChart(id); renderCriteriaTable(id); renderSpiderChart(id); }
-      renderCombinedChart();
-      renderCombinedSpiderChart();
-      renderCombinedTable();
+      renderCombinedPanel();
       updateDirtyIndicator(teamId);
     }
   });
@@ -1343,6 +1619,29 @@ function wireGlobalButtons() {
         renderSnapshotsList();
       });
     }
+  });
+
+  // Combined mode tabs
+  document.getElementById('combined-mode-tabs')?.addEventListener('click', e => {
+    const btn = e.target.closest('.combined-mode-tab');
+    if (!btn) return;
+    const mode = btn.dataset.mode;
+    if (mode === state.combinedMode) return;
+    _applyMode(mode);
+    // Consensus: seed combined criteria order if empty and recompute
+    if (mode === 'consensus') {
+      if (!state.teams.combined.criteriaOrder.length) {
+        state.teams.combined.criteriaOrder = state.criteria.map(c => c.id);
+      }
+      if (!state.results.combined.length) recompute('combined');
+    }
+    // Sensitivity: auto-run
+    if (mode === 'sensitivity') {
+      computeSensitivity();
+    }
+    // Invalidate sensitivity cache on mode switch away from sensitivity
+    if (mode !== 'sensitivity') _invalidateSensitivity();
+    renderCombinedPanel();
   });
 }
 
@@ -1452,12 +1751,20 @@ function _loadCache() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function _captureState() {
+  const cloneTeam = t => ({
+    name:               t.name,
+    criteriaOrder:      [...t.criteriaOrder],
+    criteriaSelections: [...t.criteriaSelections],
+    selections:         [...t.selections],
+  });
   return {
-    p:      state.p,
-    method: state.method,
+    p:            state.p,
+    method:       state.method,
+    combinedMode: state.combinedMode,
     teams: {
-      team1: { ...state.teams.team1 },
-      team2: { ...state.teams.team2 }
+      team1:    cloneTeam(state.teams.team1),
+      team2:    cloneTeam(state.teams.team2),
+      combined: cloneTeam(state.teams.combined),
     },
     results: {
       team1: state.results.team1.map(r => ({ ...r })),
@@ -1475,16 +1782,65 @@ function _restoreState(saved) {
   if (state.p      === 0       && legacyP      !== undefined) state.p      = legacyP;
   if (state.method === 'topsis' && legacyMethod !== undefined) state.method = legacyMethod;
 
-  for (const teamId of TEAMS) {
+  for (const teamId of [...TEAMS, 'combined']) {
     if (saved.teams?.[teamId]) {
       Object.assign(state.teams[teamId], {
         criteriaOrder:      saved.teams[teamId].criteriaOrder      ?? [],
         criteriaSelections: saved.teams[teamId].criteriaSelections ?? [],
         selections:         saved.teams[teamId].selections         ?? [],
-        isDirty:            true  // restored state counts as unsaved
+        isDirty:            true
       });
     }
   }
+  if (saved.combinedMode) _applyMode(saved.combinedMode);
+  _invalidateSensitivity();
+}
+
+/** Apply all DOM changes needed when the combined mode changes, without triggering recompute. */
+function _applyMode(mode) {
+  state.combinedMode = mode;
+
+  // Tab buttons
+  document.querySelectorAll('.combined-mode-tab').forEach(b => {
+    const active = b.dataset.mode === mode;
+    b.classList.toggle('active', active);
+    b.setAttribute('aria-selected', String(active));
+  });
+
+  // Mode-specific element visibility
+  const _set = (id, hidden) => { const el = document.getElementById(id); if (el) el.hidden = hidden; };
+  _set('combined-sensitivity-controls',  mode !== 'sensitivity');
+  _set('combined-sensitivity-results',   mode !== 'sensitivity');
+  _set('combined-copeland-description',  mode !== 'copeland');
+  _set('combined-consensus-description', mode !== 'consensus');
+
+  const viewToggle = document.getElementById('combined-view-toggle');
+  if (viewToggle) viewToggle.hidden = mode === 'sensitivity';
+
+  // Reset to bar view
+  if (mode !== 'sensitivity') {
+    _set('combined-chart-wrap',         false);
+    _set('combined-spider-wrap',        true);
+    _set('combined-criteria-table-wrap', true);
+    viewToggle?.querySelectorAll('.btn-view-icon').forEach(b =>
+      b.classList.toggle('active', b.dataset.view === 'bar')
+    );
+  } else {
+    _set('combined-chart-wrap', true);
+  }
+
+  // Subtitle
+  const subtitleMap = { consensus: 'Consensus', copeland: 'Combined', sensitivity: 'Sensitivity Analysis' };
+  const subtitleEl = document.getElementById('combined-subtitle');
+  if (subtitleEl) subtitleEl.textContent = subtitleMap[mode] ?? 'Combined';
+
+  // Grid layout and consensus-only panels
+  document.querySelector('.main-grid')?.classList.toggle('main-grid--mode-consensus', mode === 'consensus');
+  _set('combined-criteria-col', mode !== 'consensus');
+  _set('combined-results-col',  mode !== 'consensus');
+
+  // Persist
+  try { localStorage.setItem('madm_combined_mode', mode); } catch {}
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1519,16 +1875,16 @@ function _cssVar(name) {
  * Shared Chart.js scale config for all score bar charts.
  * Both team charts and the combined chart use the same axis structure.
  */
-function _baseChartScales(tickColor, gridColor) {
+function _baseChartScales(tickColor, gridColor, xMin = 0) {
   return {
     x: {
-      min: 0,
+      min: xMin,
       title: { display: true, text: 'Score', color: tickColor },
       ticks: { color: tickColor },
       grid:  { color: gridColor }
     },
     y: {
-      ticks: { color: tickColor, font: { size: 11 } },
+      ticks: { color: tickColor, font: { size: 11 }, autoSkip: false },
       grid:  { color: gridColor }
     }
   };
@@ -1544,15 +1900,14 @@ function _destroyChart(canvas) {
  * Marks both teams dirty, recomputes scores, and refreshes all dependent views.
  */
 function _onSharedSettingChanged() {
+  _invalidateSensitivity();
   for (const teamId of TEAMS) {
     state.teams[teamId].isDirty = true;
     recompute(teamId);
     renderPanel(teamId);
     updateDirtyIndicator(teamId);
   }
-  renderCombinedChart();
-  renderCombinedSpiderChart();
-  renderCombinedTable();
+  renderCombinedPanel();
 }
 
 /** Convert a CSS hex color (#rrggbb) to rgba(r,g,b,alpha) for canvas compatibility. */

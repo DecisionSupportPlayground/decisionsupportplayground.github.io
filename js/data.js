@@ -136,12 +136,13 @@ export function parseAlternativesCSV(csvText) {
  *
  * @param {any[][]} rows  Raw 2D array from the sheet.
  * @returns {{
- *   team1: {teamName:string, criteriaOrder:string[], selections:string[], p:number, method:string} | null,
- *   team2: {teamName:string, criteriaOrder:string[], selections:string[], p:number, method:string} | null
+ *   team1:    {teamName:string, criteriaOrder:string[], selections:string[], p:number, method:string} | null,
+ *   team2:    {teamName:string, criteriaOrder:string[], selections:string[], p:number, method:string} | null,
+ *   combined: {teamName:string, criteriaOrder:string[], selections:string[], p:number, method:string} | null
  * }}
  */
 export function parseRankingsData(rows) {
-  const result = { team1: null, team2: null };
+  const result = { team1: null, team2: null, combined: null };
   if (!rows || rows.length < 2) return result;
 
   // Detect format from header row:
@@ -152,13 +153,13 @@ export function parseRankingsData(rows) {
 
   if (isNewFormat) {
     // New format: one row per criterion per team
-    const byTeam = { team1: [], team2: [] };
+    const byTeam = { team1: [], team2: [], combined: [] };
     for (let i = 1; i < rows.length; i++) {
       const row = rows[i];
       const team = String(row[0] ?? '').trim();
-      if (team === 'team1' || team === 'team2') byTeam[team].push(row);
+      if (team === 'team1' || team === 'team2' || team === 'combined') byTeam[team].push(row);
     }
-    for (const team of ['team1', 'team2']) {
+    for (const team of ['team1', 'team2', 'combined']) {
       const teamRows = byTeam[team];
       if (!teamRows.length) continue;
       // Sort rows by rank column (index 3)

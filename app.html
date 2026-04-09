@@ -110,6 +110,17 @@
           <button class="method-tab"        data-method="aras">ARAS</button>
         </div>
       </div>
+      <div class="shared-setting-block">
+        <div class="setting-label">Filters</div>
+        <div class="filter-row combined-filter">
+          <input id="combined-calc-selected" class="calc-selected-checkbox" type="checkbox">
+          <label for="combined-calc-selected">Calculate selected alternatives only</label>
+        </div>
+        <div class="filter-row combined-filter">
+          <input id="combined-calc-criteria" class="calc-criteria-checkbox" type="checkbox" data-team="combined">
+          <label for="combined-calc-criteria">Calculate selected criteria only</label>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -149,29 +160,86 @@
     <div class="combined-column">
       <div class="combined-section">
         <div class="combined-header">
-          <h3>Combined Ranking</h3>
-          <div class="view-toggle-group" data-team="combined">
-            <button class="btn-view-icon active" data-view="bar" title="Bar chart">Bar</button>
-            <button class="btn-view-icon" data-view="spider" title="Spider chart">Spider</button>
-            <button class="btn-view-icon" data-view="table" title="Criteria table">Table</button>
+          <div class="combined-header-top">
+            <div class="combined-title-wrap">
+              <h3 id="combined-title">Group Ranking</h3>
+              <p id="combined-subtitle" class="combined-subtitle">Combined</p>
+            </div>
+            <details class="method-info">
+              <summary class="method-info-icon">ℹ</summary>
+              <div class="method-info-panel">
+                <dl>
+                  <dt>Consensus</dt>
+                  <dd>One agreed-upon criteria order runs the MCDM jointly. Gives a single ranking but can mask real team disagreement.</dd>
+                  <dt>Copeland</dt>
+                  <dd>Each team ranks with their own weights. Results are combined by pairwise vote — the alternative preferred by more teams wins each head-to-head. "Table" view shows the full pairwise matrix.</dd>
+                  <dt>Sensitivity</dt>
+                  <dd>Interpolates between the two teams' weight vectors and re-runs the MCDM across the full range. Identifies "flip points" where the top alternative changes.</dd>
+                </dl>
+              </div>
+            </details>
+            <div class="combined-mode-tabs" id="combined-mode-tabs" role="tablist" aria-label="Combined ranking mode">
+              <button class="combined-mode-tab" data-mode="consensus" role="tab" aria-selected="false">Consensus</button>
+              <button class="combined-mode-tab active" data-mode="copeland" role="tab" aria-selected="true">Combined</button>
+              <button class="combined-mode-tab" data-mode="sensitivity" role="tab" aria-selected="false">Analysis</button>
+            </div>
+          </div>
+          <div class="combined-header-bottom">
+            <div class="view-toggle-group" data-team="combined" id="combined-view-toggle">
+              <button class="btn-view-icon active" data-view="bar" title="Bar chart">Bar</button>
+              <button class="btn-view-icon" data-view="table" title="Table">Table</button>
+            </div>
           </div>
         </div>
-        <div class="filter-row combined-filter">
-          <input id="combined-calc-selected" class="calc-selected-checkbox" type="checkbox">
-          <label for="combined-calc-selected">Calculate selected alternatives only</label>
+        <div id="combined-sensitivity-controls" hidden>
+          <div id="combined-sensitivity-summary" class="sensitivity-summary"></div>
+          <div id="combined-sensitivity-progress" hidden>
+            <div class="sensitivity-progress-bar">
+              <div id="sensitivity-progress-fill"></div>
+            </div>
+            <span id="sensitivity-progress-text">Computing…</span>
+          </div>
         </div>
-        <div class="filter-row combined-filter">
-          <input id="combined-calc-criteria" class="calc-criteria-checkbox" type="checkbox" data-team="combined">
-          <label for="combined-calc-criteria">Calculate selected criteria only</label>
+        <div id="combined-copeland-description" class="sensitivity-summary">
+          <p class="sensitivity-section-label">Uses Copeland calculation to combine Team 1 and Team 2 rankings.</p>
+        </div>
+        <div id="combined-consensus-description" class="sensitivity-summary" hidden>
+          <p class="sensitivity-section-label">Pick a shared criteria ranking to calculate the best alternatives.</p>
         </div>
         <div class="chart-wrap chart-wrap-combined" id="combined-chart-wrap">
           <canvas id="combined-chart"></canvas>
         </div>
+        <div id="combined-sensitivity-results" class="sensitivity-summary" hidden></div>
         <div class="spider-wrap" id="combined-spider-wrap" hidden>
           <canvas id="combined-spider"></canvas>
         </div>
         <div class="criteria-table-wrap" id="combined-criteria-table-wrap" hidden></div>
       </div>
+    </div>
+
+    <!-- ② Combined criteria (Consensus mode only) -->
+    <div class="team-col combined" id="combined-criteria-col" hidden>
+      <section class="panel-section">
+        <div class="section-title">
+          Consensus Criteria
+          <details class="method-info">
+            <summary class="method-info-icon">?</summary>
+            <div class="method-info-panel">
+              <p>Drag criteria to agree on a shared priority order for the consensus calculation.</p>
+              <p class="hint">Look for criteria where both teams ranked similarly — these are natural anchors. For disputed criteria, consider splitting the difference in rank, or discussing whether the disagreement reflects a genuine values conflict worth surfacing.</p>
+            </div>
+          </details>
+        </div>
+        <div class="section-body" id="combined-criteria-wrap" style="padding:.5rem;"></div>
+      </section>
+    </div>
+
+    <!-- ② Combined results (Consensus mode only) -->
+    <div class="team-col combined" id="combined-results-col" hidden>
+      <section class="panel-section">
+        <div class="section-title">Consensus Alternatives</div>
+        <div class="section-body" id="combined-results-wrap"></div>
+      </section>
     </div>
 
     <!-- ③ Team 2 — chart (top-right on large screens) -->
@@ -208,14 +276,7 @@
             </div>
           </details>
         </div>
-        <div class="section-body" style="padding:.5rem;">
-          <ul id="team1-criteria-list" class="criteria-list"></ul>
-          <div class="filter-row" style="margin-top:.4rem;">
-            <input id="team1-calc-criteria" class="calc-criteria-checkbox" type="checkbox" data-team="team1">
-            <label for="team1-calc-criteria">Calculate selected criteria only</label>
-          </div>
-          <button id="team1-save-btn" class="btn-save-ranking" style="margin-top:.5rem;">Save Ranking</button>
-        </div>
+        <div class="section-body" id="team1-criteria-wrap" style="padding:.5rem;"></div>
       </section>
     </div>
 
@@ -232,25 +293,7 @@
             </div>
           </details>
         </div>
-        <div class="section-body">
-          <div class="filter-row">
-            <input id="team1-calc-selected" class="calc-selected-checkbox"
-                   type="checkbox" data-team="team1">
-            <label for="team1-calc-selected">Calculate selected alternatives only</label>
-          </div>
-          <table class="results-table">
-            <thead>
-              <tr>
-                <th class="rank-cell">#</th>
-                <th class="id-cell">ID</th>
-                <th class="desc-cell">Description</th>
-                <th class="score-cell">Score</th>
-                <th class="sel-cell" title="Mark as selected">★</th>
-              </tr>
-            </thead>
-            <tbody id="team1-results-body"></tbody>
-          </table>
-        </div>
+        <div class="section-body" id="team1-results-wrap"></div>
       </section>
     </div>
 
@@ -268,14 +311,7 @@
             </div>
           </details>
         </div>
-        <div class="section-body" style="padding:.5rem;">
-          <ul id="team2-criteria-list" class="criteria-list"></ul>
-          <div class="filter-row" style="margin-top:.4rem;">
-            <input id="team2-calc-criteria" class="calc-criteria-checkbox" type="checkbox" data-team="team2">
-            <label for="team2-calc-criteria">Calculate selected criteria only</label>
-          </div>
-          <button id="team2-save-btn" class="btn-save-ranking" style="margin-top:.5rem;">Save Ranking</button>
-        </div>
+        <div class="section-body" id="team2-criteria-wrap" style="padding:.5rem;"></div>
       </section>
     </div>
 
@@ -292,25 +328,7 @@
             </div>
           </details>
         </div>
-        <div class="section-body">
-          <div class="filter-row">
-            <input id="team2-calc-selected" class="calc-selected-checkbox"
-                   type="checkbox" data-team="team2">
-            <label for="team2-calc-selected">Calculate selected alternatives only</label>
-          </div>
-          <table class="results-table">
-            <thead>
-              <tr>
-                <th class="rank-cell">#</th>
-                <th class="id-cell">ID</th>
-                <th class="desc-cell">Description</th>
-                <th class="score-cell">Score</th>
-                <th class="sel-cell" title="Mark as selected">★</th>
-              </tr>
-            </thead>
-            <tbody id="team2-results-body"></tbody>
-          </table>
-        </div>
+        <div class="section-body" id="team2-results-wrap"></div>
       </section>
     </div>
 

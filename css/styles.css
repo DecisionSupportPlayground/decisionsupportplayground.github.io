@@ -86,6 +86,8 @@
    Reset / base
    ────────────────────────────────────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+/* Ensure the HTML hidden attribute is always respected, even when display is set by other rules */
+[hidden] { display: none !important; }
 
 html { font-size: 15px; }
 body {
@@ -559,6 +561,18 @@ ul { list-style: none; }
     "t2-crit"
     "t2-res";
 }
+.main-grid--mode-consensus {
+  grid-template-areas:
+    "combined"
+    "t1-chart"
+    "t1-crit"
+    "t1-res"
+    "com-crit"
+    "com-res"
+    "t2-chart"
+    "t2-crit"
+    "t2-res";
+}
 
 /* ── Medium: combined full-width top, 2-col below ── */
 @media (min-width: 760px) and (max-width: 1199px) {
@@ -833,7 +847,8 @@ ul { list-style: none; }
   accent-color: var(--team1);
   cursor: pointer;
 }
-.team2 .criterion-checkbox { accent-color: var(--team2); }
+.team2     .criterion-checkbox { accent-color: var(--team2);    }
+.combined  .criterion-checkbox { accent-color: var(--combined); }
 
 /* Deselected criteria: use a dimmer background (same approach as non-selected alternatives) */
 .criterion-item.deselected { background: var(--surface); }
@@ -1037,15 +1052,17 @@ ul { list-style: none; }
 .results-table tbody tr:hover td { background: var(--surface2); }
 
 .results-table tr.selected-alt td { background: var(--team1-glow); }
-.team2 .results-table tr.selected-alt td { background: var(--team2-glow); }
+.team2    .results-table tr.selected-alt td { background: var(--team2-glow); }
+.combined .results-table tr.selected-alt td { background: var(--combined-glow); }
 
 .rank-cell  { font-weight: 700; width: 2.2rem; text-align: center; }
 .id-cell    { font-family: monospace; font-size: .82rem; width: 4rem; }
 .desc-cell  { color: var(--text-muted); }
 .score-cell { font-family: monospace; text-align: right; width: 4.5rem; }
 .sel-cell   { text-align: center; width: 2.5rem; }
-.sel-cell input[type=checkbox] { accent-color: var(--team1); cursor: pointer; }
-.team2 .sel-cell input[type=checkbox] { accent-color: var(--team2); }
+.sel-cell input[type=checkbox]                { accent-color: var(--team1);    cursor: pointer; }
+.team2    .sel-cell input[type=checkbox]      { accent-color: var(--team2);    cursor: pointer; }
+.combined .sel-cell input[type=checkbox]      { accent-color: var(--combined); cursor: pointer; }
 
 /* ──────────────────────────────────────────────────────────────────────────
    Chart
@@ -1072,9 +1089,20 @@ ul { list-style: none; }
 
 .combined-header {
   display: flex;
-  align-items: baseline;
-  gap: .75rem;
+  flex-direction: column;
+  gap: .4rem;
   margin-bottom: .75rem;
+}
+.combined-header-top {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  flex-wrap: wrap;
+}
+.combined-header-bottom {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
 }
 .combined-header h3 {
   font-size: .95rem;
@@ -1082,13 +1110,33 @@ ul { list-style: none; }
   font-family: var(--font-ui);
   color: var(--combined);
 }
+.combined-title-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: .1rem;
+}
+.combined-subtitle {
+  font-size: .75rem;
+  font-weight: 400;
+  font-family: var(--font-ui);
+  color: var(--text-muted);
+  margin: 0;
+  line-height: 1;
+}
 .combined-filter {
   margin-bottom: .5rem;
   accent-color: var(--combined);
+  white-space: nowrap;
 }
 
 .chart-wrap-combined {
   min-height: 120px; /* JS sets actual height based on bar count */
+}
+
+.sensitivity-note {
+  font-size: .78rem;
+  color: var(--text-muted);
+  margin: .25rem 0 0;
 }
 
 /* Shared Weighting & Method (sits between combined chart and team panels) */
@@ -1102,11 +1150,15 @@ ul { list-style: none; }
   display: flex;
   align-items: flex-start;
   gap: 2.5rem;
-  max-width: 680px;
+  max-width: 750px;
   margin: 0 auto;
 }
 
 .shared-setting-block { flex: 1; min-width: 0; }
+.shared-setting-block:last-child { flex: none; }
+
+/* Ensure the method tabs always have room for all four labels */
+#shared-method-tabs { min-width: 220px; }
 
 /* Shared p-slider thumb — amber/combined color */
 .shared-slider::-webkit-slider-thumb {
@@ -1122,6 +1174,168 @@ ul { list-style: none; }
 
 @media (max-width: 560px) {
   .shared-settings-inner { flex-direction: column; gap: 1rem; }
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Combined mode tabs
+   ────────────────────────────────────────────────────────────────────────── */
+.combined-mode-tabs {
+  display: flex;
+  gap: 2px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  margin-left: auto;
+}
+.combined-mode-tab {
+  background: transparent;
+  border: none;
+  padding: .2rem .55rem;
+  font-size: .65rem;
+  font-weight: 600;
+  font-family: var(--font-ui);
+  color: var(--text-muted);
+  opacity: .6;
+  cursor: pointer;
+  transition: opacity var(--transition), background var(--transition);
+}
+.combined-mode-tab:hover  { opacity: .8; background: var(--surface2); }
+.combined-mode-tab.active { opacity: 1;  background: var(--combined-glow); color: var(--combined); }
+
+/* Consensus mode: grid areas for combined criteria + results cols */
+#combined-criteria-col { grid-area: com-crit; }
+#combined-results-col  { grid-area: com-res;  }
+
+#combined-criteria-col .section-title,
+#combined-results-col  .section-title { color: var(--combined); }
+
+/* Consensus mode grid overrides */
+@media (min-width: 1200px) {
+  /*
+   * Row 1: charts (unchanged)
+   * Row 2: t1-crit(4) com-crit(4) t2-crit(4)  — criteria priority across all three
+   * Row 3: t1-res(4)  com-res(4)  t2-res(4)   — ranked alternatives across all three
+   */
+  .main-grid--mode-consensus {
+    grid-template-columns: repeat(12, 1fr);
+    grid-template-areas:
+      "t1-chart t1-chart t1-chart t1-chart  combined combined combined combined  t2-chart t2-chart t2-chart t2-chart"
+      "t1-crit  t1-crit  t1-crit  t1-crit   com-crit com-crit com-crit com-crit  t2-crit  t2-crit  t2-crit  t2-crit"
+      "t1-res   t1-res   t1-res   t1-res    com-res  com-res  com-res  com-res   t2-res   t2-res   t2-res   t2-res";
+  }
+  .main-grid--mode-consensus #combined-criteria-col,
+  .main-grid--mode-consensus #combined-results-col  {
+    border-top:  1px solid var(--border);
+    border-left: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+  }
+}
+@media (min-width: 760px) and (max-width: 1199px) {
+  /* Medium: combined full-width top, team charts side by side, then consensus cols full-width below */
+  .main-grid--mode-consensus {
+    grid-template-columns: 1fr 1fr;
+    grid-template-areas:
+      "combined  combined"
+      "t1-chart  t2-chart"
+      "t1-crit   t2-crit"
+      "t1-res    t2-res"
+      "com-crit  com-crit"
+      "com-res   com-res";
+  }
+  .main-grid--mode-consensus #combined-criteria-col,
+  .main-grid--mode-consensus #combined-results-col {
+    border-top: 1px solid var(--border);
+  }
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Pairwise matrix (Copeland mode)
+   ────────────────────────────────────────────────────────────────────────── */
+.combined-pairwise-toggle {
+  font-size: .72rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: .4rem 0;
+  display: block;
+}
+.combined-pairwise-toggle:hover { color: var(--text); }
+
+.pairwise-table {
+  border-collapse: collapse;
+  font-size: .68rem;
+  font-family: var(--font-ui);
+  margin-top: .5rem;
+}
+.pairwise-table th,
+.pairwise-table td {
+  width: 1.4rem;
+  height: 1.4rem;
+  text-align: center;
+  border: 1px solid var(--border);
+}
+.pairwise-cell-win  { background: rgba(58,191,143,0.3);  }
+.pairwise-cell-loss { background: rgba(220,53,69,0.2);   }
+.pairwise-cell-tie  { background: var(--surface2); }
+.pairwise-cell-self { background: var(--surface); color: var(--text-dim); }
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Sensitivity analysis (Sensitivity mode)
+   ────────────────────────────────────────────────────────────────────────── */
+#combined-sensitivity-controls {
+  padding: .5rem 0;
+}
+.sensitivity-summary {
+  font-size: .82rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin-bottom: .75rem;
+}
+.sensitivity-spans {
+  margin: .3rem 0 .5rem 1rem;
+  padding: 0;
+}
+.sensitivity-progress-bar {
+  height: 4px;
+  background: var(--surface2);
+  border-radius: 99px;
+  overflow: hidden;
+  margin-bottom: .4rem;
+}
+#sensitivity-progress-fill {
+  height: 100%;
+  background: var(--combined);
+  transition: width .1s linear;
+  width: 0%;
+}
+.sensitivity-weight-details,
+.sensitivity-flip,
+.sensitivity-chart-header {
+  margin-top: .75rem;
+  font-size: .82rem;
+}
+.sensitivity-section-label {
+  font-weight: 600;
+  color: var(--text);
+  margin: 0 0 .3rem;
+}
+.sensitivity-hint {
+  display: block;
+  font-weight: 400;
+  font-size: .76rem;
+  color: var(--text-muted);
+  margin-top: .1rem;
+}
+.sensitivity-weight-table {
+  border-collapse: collapse;
+  margin-top: .4rem;
+  width: 100%;
+  font-size: .75rem;
+}
+.sensitivity-weight-table th,
+.sensitivity-weight-table td {
+  padding: .2rem .4rem;
+  border: 1px solid var(--border);
+  text-align: left;
 }
 
 /* ──────────────────────────────────────────────────────────────────────────
