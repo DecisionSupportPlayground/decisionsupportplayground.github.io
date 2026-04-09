@@ -939,8 +939,13 @@ async function computeSensitivity(nSteps = 20) {
     diff: Math.abs((w1.get(id) ?? 0) - (w2.get(id) ?? 0)) * 100
   })).sort((a, b) => b.diff - a.diff).slice(0, 5);
 
+  // Midpoint weight blend (t=0.5) used for method-comparison spider
+  const midMixed = critIds.map(id => 0.5 * (w1.get(id) ?? 0) + 0.5 * (w2.get(id) ?? 0));
+  const midSum   = midMixed.reduce((a, b) => a + b, 0);
+  const midWeights = midSum > 0 ? midMixed.map(w => w / midSum) : midMixed.map(() => 1 / midMixed.length);
+
   if (gen !== state.sensitivityGen) return; // invalidated while computing
-  state.sensitivityCache   = { steps, altIds, ranks: allRanks, flipPoints, summary, weightDiff };
+  state.sensitivityCache   = { steps, altIds, ranks: allRanks, flipPoints, summary, weightDiff, matrix, critIds, types, midWeights };
   state.sensitivityRunning = false;
   renderSensitivityPanel();
 }
@@ -951,6 +956,7 @@ function renderSensitivityPanel() {
   const progressDiv = document.getElementById('combined-sensitivity-progress');
   const summaryDiv  = document.getElementById('combined-sensitivity-summary');
   const resultsDiv  = document.getElementById('combined-sensitivity-results');
+  const methodsDiv  = document.getElementById('combined-sensitivity-methods');
   if (!controls) return;
 
   controls.hidden = false;
@@ -959,6 +965,7 @@ function renderSensitivityPanel() {
     if (progressDiv) progressDiv.hidden = false;
     if (chartWrap)   chartWrap.hidden   = true;
     if (resultsDiv)  resultsDiv.hidden  = true;
+    if (methodsDiv)  methodsDiv.hidden  = true;
     return;
   }
 
@@ -967,6 +974,7 @@ function renderSensitivityPanel() {
   if (!state.sensitivityCache) {
     if (chartWrap)  chartWrap.hidden  = true;
     if (resultsDiv) resultsDiv.hidden = true;
+    if (methodsDiv) methodsDiv.hidden = true;
     if (summaryDiv) summaryDiv.innerHTML = '';
     computeSensitivity();
     return;
@@ -975,12 +983,14 @@ function renderSensitivityPanel() {
   // Results ready
   if (chartWrap)  chartWrap.hidden  = false;
   if (resultsDiv) resultsDiv.hidden = false;
+  if (methodsDiv) methodsDiv.hidden = false;
 
   const canvas = document.getElementById('combined-chart');
   if (canvas) _renderSensitivityLineChart(canvas, state.sensitivityCache);
 
   if (summaryDiv) _renderSensitivitySummary(summaryDiv, state.sensitivityCache);
   if (resultsDiv) _renderSensitivityResults(resultsDiv, state.sensitivityCache);
+  _renderMethodComparisonSpider(state.sensitivityCache);
 }
 
 function _renderSensitivityLineChart(canvas, cache) {
@@ -1107,6 +1117,139 @@ function _renderSensitivityResults(el, cache) {
   ).join('');
 
   el.innerHTML = `${flipText}<ul class="sensitivity-spans">${spans}</ul>`;
+}
+
+/**
+ * Render the method-comparison radar chart: 4 axes (TOPSIS, SAW, MABAC, ARAS),
+ * one dataset per selected alternative, scores normalised per-method to [0–1].
+ */
+function _renderMethodComparisonSpider(cache) {
+  const canvas = document.getElementById('combined-method-spider');
+  if (!canvas || typeof Chart === 'undefined') return;
+
+  const { matrix, types, midWeights, altIds } = cache;
+  if (!matrix?.length || !midWeights?.length) { _destroyChart(canvas); return; }
+
+  const METHODS      = ['topsis', 'saw', 'mabac', 'aras'];
+  const METHOD_LABELS = ['TOPSIS', 'SAW', 'MABAC', 'ARAS'];
+
+  // Run each method with the midpoint weight blend
+  const rawScores = METHODS.map(m => {
+    try { return runMethod(m, matrix, midWeights, types); }
+    catch { return altIds.map(() => 0); }
+  });
+
+  // Normalise each method's scores to [0, 1] so axes are comparable
+  const normalised = rawScores.map(scores => {
+    const min = Math.min(...scores), max = Math.max(...scores);
+    return max === min ? scores.map(() => 0.5) : scores.map(s => (s - min) / (max - min));
+  });
+
+  // Alternatives to display: union of selections, or top-5 by average normalised score
+  const selectedIds = new Set([...state.teams.team1.selections, ...state.teams.team2.selections]);
+  let displayIds = altIds.filter(id => selectedIds.has(id));
+  if (!displayIds.length) {
+    displayIds = altIds
+      .map((id, ai) => ({ id, avg: normalised.reduce((s, n) => s + n[ai], 0) / METHODS.length }))
+      .sort((a, b) => b.avg - a.avg)
+      .slice(0, 5)
+      .map(r => r.id);
+  }
+  // Sort clockwise: A1, A2, A3… A9, A11, A12…
+  displayIds.sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
+
+  const altPalette = [
+    _cssVar('--team1'), _cssVar('--team2'), _cssVar('--combined'),
+    '#a78bfa', '#fb923c', '#f43f5e', '#22d3ee', '#84cc16'
+  ];
+  const methodPalette = ['#3b82f6', '#f59e0b', '#22c55e', '#ec4899'];
+  const gridColor = _cssVar('--border');
+  const tickColor = _cssVar('--text-muted');
+
+  // ── Chart 1: axes = methods, lines = alternatives (normalised scores) ──────
+  const datasets1 = displayIds.map((id, di) => {
+    const ai    = altIds.indexOf(id);
+    const data  = normalised.map(n => +(n[ai] ?? 0).toFixed(3));
+    const color = altPalette[di % altPalette.length];
+    const alt   = state.alternatives.find(a => a.id === id);
+    return {
+      label:                id + (alt?.description ? `: ${alt.description}` : ''),
+      data,
+      backgroundColor:      _hexToRgba(color, 0.12),
+      borderColor:          color,
+      pointBackgroundColor: color,
+      pointRadius:          4,
+      borderWidth:          2
+    };
+  });
+
+  const radarOpts = (_labels, max, tooltipFn) => ({
+    responsive: true, maintainAspectRatio: true, aspectRatio: 1,
+    layout: { padding: 10 },
+    scales: {
+      r: {
+        min: 0, max,
+        ticks:       { display: false },
+        grid:        { color: gridColor },
+        angleLines:  { color: gridColor },
+        pointLabels: { color: tickColor, font: { size: 11 } }
+      }
+    },
+    plugins: {
+      legend: { display: true, position: 'bottom',
+        labels: { color: tickColor, boxWidth: 10, padding: 8, usePointStyle: true, font: { size: 10 } } },
+      tooltip: { callbacks: { label: tooltipFn } }
+    }
+  });
+
+  if (canvas._chart) {
+    canvas._chart.data.datasets = datasets1;
+    canvas._chart.update('none');
+  } else {
+    canvas._chart = new Chart(canvas, {
+      type: 'radar',
+      data: { labels: METHOD_LABELS, datasets: datasets1 },
+      options: radarOpts(METHOD_LABELS, 1, ctx => ` ${ctx.dataset.label}: ${(ctx.parsed.r * 100).toFixed(0)}%`)
+    });
+  }
+
+  // ── Chart 2: axes = alternatives, lines = methods (rank-based) ────────────
+  const canvas2 = document.getElementById('combined-method-spider-2');
+  if (!canvas2) return;
+
+  const n = displayIds.length;
+  // Rank within the displayed set only (1 = best). Inverted so further from centre = better.
+  const datasets2 = METHODS.map((_m, mi) => {
+    const scores = displayIds.map(id => rawScores[mi][altIds.indexOf(id)]);
+    const sorted = [...scores].sort((a, b) => b - a);   // descending = rank 1 best
+    const rankOf = s => sorted.indexOf(s) + 1;
+    const data   = scores.map(s => +(n - rankOf(s) + 1).toFixed(0)); // invert: rank1 → n (far from centre)
+    const color  = methodPalette[mi % methodPalette.length];
+    return {
+      label:                METHOD_LABELS[mi],
+      data,
+      backgroundColor:      _hexToRgba(color, 0.12),
+      borderColor:          color,
+      pointBackgroundColor: color,
+      pointRadius:          4,
+      borderWidth:          2
+    };
+  });
+
+  if (canvas2._chart) {
+    canvas2._chart.data.labels   = displayIds;
+    canvas2._chart.data.datasets = datasets2;
+    canvas2._chart.update('none');
+  } else {
+    canvas2._chart = new Chart(canvas2, {
+      type: 'radar',
+      data: { labels: displayIds, datasets: datasets2 },
+      options: radarOpts(displayIds, n, ctx => {
+        const rank = n - ctx.parsed.r + 1;
+        return ` ${ctx.dataset.label}: rank #${rank}`;
+      })
+    });
+  }
 }
 
 /**
@@ -1811,6 +1954,7 @@ function _applyMode(mode) {
   const _set = (id, hidden) => { const el = document.getElementById(id); if (el) el.hidden = hidden; };
   _set('combined-sensitivity-controls',  mode !== 'sensitivity');
   _set('combined-sensitivity-results',   mode !== 'sensitivity');
+  _set('combined-sensitivity-methods',   mode !== 'sensitivity');
   _set('combined-copeland-description',  mode !== 'copeland');
   _set('combined-consensus-description', mode !== 'consensus');
 
@@ -1826,7 +1970,8 @@ function _applyMode(mode) {
       b.classList.toggle('active', b.dataset.view === 'bar')
     );
   } else {
-    _set('combined-chart-wrap', true);
+    _set('combined-chart-wrap',          true);
+    _set('combined-criteria-table-wrap', true);
   }
 
   // Subtitle

@@ -1338,6 +1338,16 @@ ul { list-style: none; }
   text-align: left;
 }
 
+.method-spider-row {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+}
+.method-spider-col {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
 /* ──────────────────────────────────────────────────────────────────────────
    Snapshots bar
    ────────────────────────────────────────────────────────────────────────── */

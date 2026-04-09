@@ -210,6 +210,19 @@
           <canvas id="combined-chart"></canvas>
         </div>
         <div id="combined-sensitivity-results" class="sensitivity-summary" hidden></div>
+        <div id="combined-sensitivity-methods" class="sensitivity-summary" hidden>
+          <p class="sensitivity-section-label">Method robustness</p>
+          <div class="method-spider-row">
+            <div class="method-spider-col" hidden>
+              <p class="sensitivity-hint">Axes = methods, lines = alternatives. Larger shape = consistently high score across methods.</p>
+              <canvas id="combined-method-spider"></canvas>
+            </div>
+            <div class="method-spider-col">
+              <p class="sensitivity-hint">Differences between method lines indicate alternatives whose ranking is sensitive to the choice of MCDM method. Where lines converge, the ranking is robust regardless of method.</p>
+              <canvas id="combined-method-spider-2"></canvas>
+            </div>
+          </div>
+        </div>
         <div class="spider-wrap" id="combined-spider-wrap" hidden>
           <canvas id="combined-spider"></canvas>
         </div>
