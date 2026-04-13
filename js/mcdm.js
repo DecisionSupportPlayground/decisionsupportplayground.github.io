@@ -79,7 +79,7 @@ export async function initMCDM() {
 import sys
 sys.path.insert(0, '/')
 import numpy as np
-from pymcdm.methods import TOPSIS, MABAC, ARAS
+from pymcdm.methods import TOPSIS, MABAC, ARAS, VIKOR, CODAS, COPRAS, EDAS, MAIRCA, MARCOS, MOORA, WASPAS, COCOSO
 from pymcdm import normalizations
 
 try:
@@ -94,6 +94,15 @@ _methods = {
     'saw':    _saw_inst,
     'mabac':  MABAC(),
     'aras':   ARAS(normalization_function=normalizations.max_normalization),
+    'vikor':  VIKOR(),
+    'codas':  CODAS(normalization_function=normalizations.max_normalization),
+    'copras': COPRAS(),
+    'edas':   EDAS(),
+    'mairca': MAIRCA(),
+    'marcos': MARCOS(normalization_function=lambda x, cost=False: (x[-2] + 1e-10) / (x + 1e-10) if cost else x / (x[-2] + 1e-10)),
+    'moora':  MOORA(),
+    'waspas': WASPAS(normalization_function=normalizations.max_normalization),
+    'cocoso': COCOSO(),
 }
 `);
 
@@ -130,14 +139,37 @@ export const topsis = (matrix, weights, types) => _call('topsis', matrix, weight
 export const saw    = (matrix, weights, types) => _call('saw',    matrix, weights, types);
 export const mabac  = (matrix, weights, types) => _call('mabac',  matrix, weights, types);
 export const aras   = (matrix, weights, types) => _call('aras',   matrix, weights, types);
+export const vikor  = (matrix, weights, types) => _call('vikor',  matrix, weights, types);
+export const codas  = (matrix, weights, types) => _call('codas',  matrix, weights, types);
+export const copras = (matrix, weights, types) => _call('copras', matrix, weights, types);
+export const edas   = (matrix, weights, types) => _call('edas',   matrix, weights, types);
+export const mairca = (matrix, weights, types) => _call('mairca', matrix, weights, types);
+export const marcos = (matrix, weights, types) => _call('marcos', matrix, weights, types);
+export const moora  = (matrix, weights, types) => _call('moora',  matrix, weights, types);
+export const waspas = (matrix, weights, types) => _call('waspas', matrix, weights, types);
+export const cocoso = (matrix, weights, types) => _call('cocoso', matrix, weights, types);
 
-/** Maps method-name strings to their implementation functions. */
-export const METHODS = { saw, topsis, mabac, aras };
+/** Maps method-name strings to their implementation functions, plus a description for the UI. */
+export const METHODS = {
+  topsis: { fn: topsis, label: 'TOPSIS', description: "Ranks alternatives by how close they sit to the best-case outcome and how far from the worst-case. Penalises 'one-trick ponies' (alternatives that excel on some criteria while failing on others). Use it when you want balanced across-the-board performance rewarded over specialisation." },
+  saw:    { fn: saw,    label: 'SAW',    description: "The simplest method: multiply each normalised score by its weight and sum. Fully compensatory: excellent performance on one criterion can completely offset poor performance on another. Use it as a baseline. If other methods disagree with SAW, that disagreement is itself worth investigating." },
+  mabac:  { fn: mabac,  label: 'MABAC',  description: "Compares each alternative to a border approximation area (the geometric mean of all alternatives on each criterion). Alternatives consistently above this border score highest. Use it when alternatives cluster closely together and you need a method sensitive enough to differentiate small margins." },
+  aras:   { fn: aras,   label: 'ARAS',   description: "Creates a theoretical 'perfect' alternative built from the best value in each criterion, then scores every real alternative as a percentage of that optimum. The output is a plain ratio: 'this option achieves 73% of the best theoretically possible score.' Use it when you want results that are easy to explain to stakeholders: the percentage framing is more concrete than an abstract index." },
+  vikor:  { fn: vikor,  label: 'VIKOR',  description: "Finds a compromise solution by balancing group utility (overall closeness to ideal) against individual regret (worst-criterion performance). Use it when stakeholders disagree on whether a big win on one criterion can offset losses elsewhere." },
+  codas:  { fn: codas,  label: 'CODAS',  description: "Euclidean distance is the primary ranking criterion; Manhattan distance breaks ties. Euclidean distance amplifies large deviations: one very bad criterion score hurts here more than in TOPSIS. Use it when you want to be especially harsh toward alternatives with any severe weakness." },
+  copras: { fn: copras, label: 'COPRAS', description: "Aggregates benefit and cost criteria through separate summations rather than simply flipping cost criteria into benefits. Alternatives with exceptionally low costs are rewarded non-linearly rather than just proportionally. Use it when cost-type criteria dominate and you want a very strong cost performer to stand out clearly." },
+  edas:   { fn: edas,   label: 'EDAS',   description: "Scores alternatives on how far they deviate above or below the group average, rewarding those consistently above average on benefits and below average on costs. Use it when your question is 'which alternative stands out from the pack?' rather than 'which is closest to theoretical perfection?'. Note that rankings can shift if the set of alternatives changes." },
+  mairca: { fn: mairca, label: 'MAIRCA', description: "Calculates a theoretical baseline from the assumption that each alternative is equally likely to be chosen, then measures how far each real alternative falls from that ideal. Use it when you want a ranking that tends to stay stable if alternatives are added or removed, as it is less sensitive to set composition than TOPSIS." },
+  marcos: { fn: marcos, label: 'MARCOS', description: "Places alternatives between an ideal and an anti-ideal reference point, then applies a non-linear utility function to that ratio. Being much better than the worst counts for less as you approach the best. Use it when a few outlier alternatives (very strong or very weak) exist and you do not want them distorting the relative ranking of the middle-ground options." },
+  moora:  { fn: moora,  label: 'MOORA',  description: "Normalises each criterion using vector normalisation (divide by the square-root of the sum of squares), then subtracts the weighted cost scores from the weighted benefit scores to get a net benefit. Use it when your criteria have very different units or scales, as vector normalisation is less distorted by outliers than the min-max normalisation used by SAW." },
+  waspas: { fn: waspas, label: 'WASPAS', description: "Blends two conflicting views of trade-offs: SAW (additive, meaning a high score on one criterion fully compensates a low score on another) and a multiplicative model (where poor performance on any single criterion drags the total score down more harshly). The \u03bb parameter (default 0.5) controls the blend. Use it when you are genuinely uncertain how much compensation between criteria should be allowed." },
+  cocoso: { fn: cocoso, label: 'CoCoSo', description: "Runs three different aggregation formulas and combines their results. The logic is triangulation: if all three formulas agree on a ranking, you can be more confident in it; where they disagree, the combined score softens extreme positions. Use it as a robustness check: if your top choice ranks first under CoCoSo, it is more defensible than if it only wins under one specific aggregation assumption." },
+};
 
 /**
  * Run a named MCDM method.
  *
- * @param {string}     name     One of 'saw' | 'topsis' | 'mabac' | 'aras'
+ * @param {string}     name     One of the keys in METHODS
  * @param {number[][]} matrix
  * @param {number[]}   weights
  * @param {number[]}   types
@@ -145,13 +177,13 @@ export const METHODS = { saw, topsis, mabac, aras };
  * @throws {Error} for unknown method names.
  */
 export function runMethod(name, matrix, weights, types) {
-  const fn = METHODS[name];
-  if (!fn) {
+  const entry = METHODS[name];
+  if (!entry) {
     throw new Error(
       `Unknown MCDM method: "${name}". Valid options: ${Object.keys(METHODS).join(', ')}`
     );
   }
-  return fn(matrix, weights, types);
+  return entry.fn(matrix, weights, types);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

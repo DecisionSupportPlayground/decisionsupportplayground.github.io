@@ -9,7 +9,7 @@
  *   - Delegates rendering to renderPanel() and renderChart()
  */
 
-import { initMCDM, rankOrderWeights, runMethod, scoreToRank, normaliseScores, invertRanksForDisplay } from './mcdm.js?v=2';
+import { initMCDM, rankOrderWeights, runMethod, scoreToRank, normaliseScores, invertRanksForDisplay, METHODS } from './mcdm.js?v=3';
 import { initTheme } from './theme.js';
 import {
   parseAlternativesCSV,
@@ -530,15 +530,20 @@ function renderCriteriaList(teamId) {
   });
 }
 
+function _updateMethodDesc() {
+  const el = document.getElementById('method-desc-text');
+  if (el) el.textContent = METHODS[state.method]?.description ?? '';
+}
+
 function renderSharedSettings() {
   const slider = document.getElementById('shared-p-slider');
   if (slider) {
     slider.value = String(state.p);
     updatePLabel(state.p);
   }
-  document.querySelectorAll('#shared-method-tabs .method-tab').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.method === state.method);
-  });
+  const _sel = document.getElementById('shared-method-select');
+  if (_sel) _sel.value = state.method;
+  _updateMethodDesc();
   for (const teamId of TEAMS) updateDirtyIndicator(teamId);
 }
 
@@ -1128,8 +1133,8 @@ function _weightsForSpiderMode(mode, critIds, midWeights) {
 }
 
 /**
- * Render the method-comparison radar chart: 4 axes (TOPSIS, SAW, MABAC, ARAS),
- * one dataset per selected alternative, scores normalised per-method to [0–1].
+ * Render the method-comparison radar chart: axes = TOPSIS + SAW + active method
+ * (if not already one of the two), one dataset per selected alternative.
  */
 function _renderMethodComparisonSpider(cache) {
   const canvas = document.getElementById('combined-method-spider');
@@ -1138,8 +1143,10 @@ function _renderMethodComparisonSpider(cache) {
   const { matrix, types, midWeights, altIds, critIds } = cache;
   if (!matrix?.length || !midWeights?.length) { _destroyChart(canvas); return; }
 
-  const METHODS      = ['topsis', 'saw', 'mabac', 'aras'];
-  const METHOD_LABELS = ['TOPSIS', 'SAW', 'MABAC', 'ARAS'];
+  const spiderMethodKeys = ['topsis', 'saw'];
+  if (!spiderMethodKeys.includes(state.method)) spiderMethodKeys.push(state.method);
+  const SPIDER_METHODS = spiderMethodKeys;
+  const METHOD_LABELS  = spiderMethodKeys.map(k => METHODS[k]?.label ?? k.toUpperCase());
 
   // Resolve which weight vector to use based on the dropdown.
   const modeEl = document.getElementById('spider-weight-mode');
@@ -1159,13 +1166,13 @@ function _renderMethodComparisonSpider(cache) {
   const selectedIds = new Set([...state.teams.team1.selections, ...state.teams.team2.selections]);
   let displayIds = altIds.filter(id => selectedIds.has(id));
   if (!displayIds.length) {
-    const fallbackScores = METHODS.map(m => {
+    const fallbackScores = SPIDER_METHODS.map(m => {
       try { return runMethod(m, matrix, spiderWeights, types); }
       catch { return altIds.map(() => 0); }
     });
     const fallbackNorm = fallbackScores.map(normaliseScores);
     displayIds = altIds
-      .map((id, ai) => ({ id, avg: fallbackNorm.reduce((s, n) => s + n[ai], 0) / METHODS.length }))
+      .map((id, ai) => ({ id, avg: fallbackNorm.reduce((s, n) => s + n[ai], 0) / SPIDER_METHODS.length }))
       .sort((a, b) => b.avg - a.avg)
       .slice(0, 5)
       .map(r => r.id);
@@ -1177,7 +1184,7 @@ function _renderMethodComparisonSpider(cache) {
   // normalised scores are computed within this set, not against the full
   // alt pool (which would skew TOPSIS/MABAC ideal/anti-ideal values).
   const displayMatrix = displayIds.map(id => matrix[altIds.indexOf(id)]);
-  const displayScores = METHODS.map(m => {
+  const displayScores = SPIDER_METHODS.map(m => {
     try { return runMethod(m, displayMatrix, spiderWeights, types); }
     catch { return displayIds.map(() => 0); }
   });
@@ -1224,10 +1231,11 @@ function _renderMethodComparisonSpider(cache) {
     }
   });
 
-  if (canvas._chart) {
+  if (canvas._chart && JSON.stringify(canvas._chart.data.labels) === JSON.stringify(METHOD_LABELS)) {
     canvas._chart.data.datasets = datasets1;
     canvas._chart.update('none');
   } else {
+    _destroyChart(canvas);
     canvas._chart = new Chart(canvas, {
       type: 'radar',
       data: { labels: METHOD_LABELS, datasets: datasets1 },
@@ -1241,7 +1249,7 @@ function _renderMethodComparisonSpider(cache) {
 
   const n = displayIds.length;
   // Rank within the displayed set only. Rank #1 (best) -> n (outer ring); rank #n (worst) -> 1 (centre).
-  const datasets2 = METHODS.map((_m, mi) => {
+  const datasets2 = SPIDER_METHODS.map((_m, mi) => {
     const data = invertRanksForDisplay(displayScores[mi]); // rank 1 (best) -> n (far from centre)
     const color  = methodPalette[mi % methodPalette.length];
     return {
@@ -1624,17 +1632,22 @@ function wireGlobalButtons() {
     logEvent(state.scriptUrl, 'p_value_changed', null, { p: state.p });
   });
 
-  // Shared method tabs: affects both teams
-  document.querySelectorAll('#shared-method-tabs .method-tab').forEach(btn => {
-    btn.addEventListener('click', () => {
-      state.method = btn.dataset.method;
-      document.querySelectorAll('#shared-method-tabs .method-tab').forEach(b =>
-        b.classList.toggle('active', b === btn)
-      );
-      logEvent(state.scriptUrl, 'algorithm_changed', null, { method: state.method });
-      _onSharedSettingChanged();
-    });
+  // Shared method dropdown: affects both teams
+  document.getElementById('shared-method-select')?.addEventListener('change', e => {
+    state.method = e.target.value;
+    logEvent(state.scriptUrl, 'algorithm_changed', null, { method: state.method });
+    _updateMethodDesc();
+    _onSharedSettingChanged();
   });
+
+  // Method description panel: restore open/closed state from localStorage
+  const _methodDescPanel = document.getElementById('method-desc-panel');
+  if (_methodDescPanel) {
+    if (localStorage.getItem('method-desc-open') === 'false') _methodDescPanel.removeAttribute('open');
+    _methodDescPanel.addEventListener('toggle', () => {
+      localStorage.setItem('method-desc-open', String(_methodDescPanel.open));
+    });
+  }
 
   // View toggle: bar ↔ spider ↔ table (icon buttons), shared by team panels and combined
   document.addEventListener('click', e => {

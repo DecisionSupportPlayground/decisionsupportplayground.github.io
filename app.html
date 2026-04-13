@@ -90,25 +90,28 @@
           <details class="method-info">
             <summary class="method-info-icon">ℹ</summary>
             <div class="method-info-panel">
-              <dl>
-                <dt>TOPSIS</dt>
-                <dd>Technique for Order of Preference by Similarity to Ideal Solution. Ranks alternatives by their distance to an ideal best and worst solution using vector normalisation.</dd>
-                <dt>SAW</dt>
-                <dd>Simple Additive Weighting (Weighted Sum Model). Scores each alternative as the weighted sum of its normalised criterion values. Intuitive and transparent.</dd>
-                <dt>MABAC</dt>
-                <dd>Multi-Attributive Border Approximation Area Comparison. Scores alternatives by how far their weighted values lie above or below a geometric-mean border solution.</dd>
-                <dt>ARAS</dt>
-                <dd>Additive Ratio Assessment. Compares each alternative against an ideal optimum row; the score is the ratio of the alternative's utility to the optimum utility.</dd>
-              </dl>
+              <p>When choosing between alternatives on multiple conflicting criteria, human judgment tends to unconsciously favour one or two criteria and apply trade-offs inconsistently, which means the same problem described in different words can produce different decisions. An MCDM algorithm removes that inconsistency: every criterion and weight is applied the same way to every alternative, making the ranking transparent and repeatable.</p>
+              <p class="sensitivity-hint">Different algorithms make slightly different assumptions about trade-offs, so comparing a few methods is more informative than relying on just one. See "About this method" below for what each method does.</p>
             </div>
           </details>
         </div>
-        <div class="method-tabs" id="shared-method-tabs">
-          <button class="method-tab active" data-method="topsis">TOPSIS</button>
-          <button class="method-tab"        data-method="saw">SAW</button>
-          <button class="method-tab"        data-method="mabac">MABAC</button>
-          <button class="method-tab"        data-method="aras">ARAS</button>
-        </div>
+        <select id="shared-method-select" class="method-select">
+          <option value="topsis">TOPSIS</option>
+          <option value="saw">SAW</option>
+          <optgroup label="More methods">
+            <option value="mabac">MABAC</option>
+            <option value="aras">ARAS</option>
+            <option value="vikor">VIKOR</option>
+            <option value="codas">CODAS</option>
+            <option value="copras">COPRAS</option>
+            <option value="edas">EDAS</option>
+            <option value="mairca">MAIRCA</option>
+            <option value="marcos">MARCOS</option>
+            <option value="moora">MOORA</option>
+            <option value="waspas">WASPAS</option>
+            <option value="cocoso">CoCoSo</option>
+          </optgroup>
+        </select>
       </div>
       <div class="shared-setting-block">
         <div class="setting-label">Filters</div>
@@ -122,6 +125,10 @@
         </div>
       </div>
     </div>
+    <details class="method-desc-panel" id="method-desc-panel" open>
+      <summary>About this method</summary>
+      <p id="method-desc-text"></p>
+    </details>
   </div>
 
   <!--

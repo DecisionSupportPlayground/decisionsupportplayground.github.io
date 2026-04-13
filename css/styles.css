@@ -103,7 +103,7 @@ body {
 /* Headings, labels, buttons, nav use Poppins */
 h1, h2, h3, h4,
 .app-title, .team-header h2, .section-title,
-.setting-label, .method-tab, .btn-primary, .btn-secondary,
+.setting-label, .btn-primary, .btn-secondary,
 .btn-save-ranking, .setup-guide-toggle, .snapshots-header h3,
 .team-badge, .landing-logo h1 {
   font-family: var(--font-ui);
@@ -972,29 +972,36 @@ ul { list-style: none; }
   margin-top: .3rem;
 }
 
-/* Method tabs */
-.method-tabs {
-  display: flex;
-  gap: 3px;
-  background: var(--bg);
-  border-radius: var(--radius);
-  padding: 3px;
+/* Method select dropdown */
+.method-select {
+  width: 100%;
+  font-size: .85rem;
+  padding: .3rem .5rem;
+  background: var(--surface2);
+  color: var(--text);
   border: 1px solid var(--border);
+  border-radius: 4px;
 }
 
-.method-tab {
-  flex: 1;
-  padding: .28rem .4rem;
-  border-radius: 4px;
-  font-size: .8rem;
-  font-weight: 600;
-  background: transparent;
-  color: var(--text-muted);
-  transition: background var(--transition), color var(--transition);
-  text-align: center;
+/* Method description collapsible panel — full-width strip below the controls row */
+.method-desc-panel {
+  max-width: 750px;
+  margin: .6rem auto 0;
+  padding-top: .6rem;
+  border-top: 1px solid var(--border);
 }
-.method-tab:hover { color: var(--text); }
-.method-tab.active { background: var(--ihe-blue); color: #fff; }
+.method-desc-panel summary {
+  cursor: pointer;
+  font-size: .75rem;
+  color: var(--text-muted);
+  user-select: none;
+}
+.method-desc-panel p {
+  margin: .4rem 0 0;
+  font-size: .8rem;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
 
 /* Save ranking button */
 .btn-save-ranking {
@@ -1157,20 +1164,12 @@ ul { list-style: none; }
 .shared-setting-block { flex: 1; min-width: 0; }
 .shared-setting-block:last-child { flex: none; }
 
-/* Ensure the method tabs always have room for all four labels */
-#shared-method-tabs { min-width: 220px; }
-
 /* Shared p-slider thumb: amber/combined color */
 .shared-slider::-webkit-slider-thumb {
   background:  var(--combined);
   box-shadow:  0 0 0 2px var(--combined);
 }
 
-/* Shared method tabs: amber active state */
-#shared-method-tabs .method-tab.active {
-  background: var(--combined);
-  color: #fff;
-}
 
 @media (max-width: 560px) {
   .shared-settings-inner { flex-direction: column; gap: 1rem; }

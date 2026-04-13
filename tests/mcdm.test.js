@@ -205,10 +205,12 @@ describe('runMethod', () => {
     );
   });
 
-  it('METHODS object contains all four methods', () => {
-    ['saw', 'topsis', 'mabac', 'aras'].forEach(name =>
-      assert.ok(typeof METHODS[name] === 'function', `Missing method: ${name}`)
-    );
+  it('METHODS object contains all 13 methods with fn, label, description', () => {
+    ['saw', 'topsis', 'mabac', 'aras', 'vikor', 'codas', 'copras', 'edas', 'mairca', 'marcos', 'moora', 'waspas', 'cocoso'].forEach(name => {
+      assert.ok(typeof METHODS[name]?.fn === 'function', `Missing fn for: ${name}`);
+      assert.ok(typeof METHODS[name]?.label === 'string', `Missing label for: ${name}`);
+      assert.ok(typeof METHODS[name]?.description === 'string', `Missing description for: ${name}`);
+    });
   });
 });
 
